@@ -1,20 +1,20 @@
 import { useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
-import Modal from "../components/Modal"
+import Notification from "../components/Modal"
 import { loginUser } from "../api/api"
 import { Eye, EyeOff } from "lucide-react"
-import c from '../images/c.webp'
+import login from '../images/login.png'
 
 export default function Login() {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [modalType, setModalType] = useState<"success" | "error">("success")
-  const [modalMessage, setModalMessage] = useState("")
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const [notificationType, setNotificationType] = useState<"success" | "error">("success")
+  const [notificationMessage, setNotificationMessage] = useState("")
   const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state as any) || {}
   const prefillEmail = state.email || ""
-  const prefillPassword = state.password || ""
+  const prefillPassword = state.password || ""  
 
   const [email, setEmail] = useState(prefillEmail)
   const [password, setPassword] = useState(prefillPassword)
@@ -24,12 +24,14 @@ export default function Login() {
     try {
       const res = await loginUser(data)
       const message = res.data?.message || "Logged in"
-      setModalType("success")
-      setModalMessage(message)
-      setModalOpen(true)
+      setNotificationType("success")
+      setNotificationMessage(`${message}`)
+      setNotificationOpen(true)
+      localStorage.setItem("userEmail", data.email)
+      localStorage.setItem("userPassword", data.password)
       setTimeout(() => {
         navigate("/dashboard")
-      }, 1200)
+      }, 2000)
     } catch (err:any) {
       let message: string
       if (err.response) {
@@ -39,9 +41,9 @@ export default function Login() {
       } else {
         message = err.message || "Login failed"
       }
-      setModalType("error")
-      setModalMessage(message)
-      setModalOpen(true)
+      setNotificationType("error")
+      setNotificationMessage(message)
+      setNotificationOpen(true)
     }
   }
 
@@ -52,8 +54,15 @@ export default function Login() {
 
   return (
     <div className="h-screen w-full flex">
+       <div className="hidden md:block md:w-1/2 h-full">
+        <img
+          src={login}
+          alt="Login Visual"
+          className="w-full h-full object-cover"
+        />
+      </div>
       <div className="w-full md:w-1/2 flex items-center justify-center bg-white px-8">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md gap-5">
           <h1 className="text-3xl font-bold text-gray-800 text-center">
             Welcome Back
           </h1>
@@ -89,41 +98,43 @@ export default function Login() {
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </span>
-              </div>
+              </div>         
             </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold shadow-md"
-            >
-              Login
-            </button>
+            <div className="flex flex-col gap-3">
+              <div className="text-right ">
+                <Link
+                  to="/forgot"
+                  state={{ email }}
+                  className="text-sm text-blue-600 hover:underline underline"
+                >
+                  Forgot password?
+                </Link>
+                <button
+                type="submit"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold shadow-md"
+                >
+                  Login
+                </button>   
+              </div>
+              
+            </div>
           </form>
-          <p className="text-sm text-center mt-3">
-            <Link to="/forgot" className="text-blue-600 hover:underline">
-              Forgot password?
-            </Link>
-          </p>
-
+         
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">No account yet?</p>
-            <Link to="/" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/register" className="text-blue-600 font-semibold hover:underline">
               Create an account
             </Link>
           </div>
         </div>
       </div>
-      <div className="hidden md:block md:w-1/2 h-full">
-        <img
-          src={c}
-          alt="Login Visual"
-          className="w-full h-full object-cover"
-        />
-      </div>
-      <Modal
-        open={modalOpen}
-        type={modalType}
-        message={modalMessage}
-        onClose={() => setModalOpen(false)}
+   
+      <Notification
+        open={notificationOpen}
+        type={notificationType}
+        message={notificationMessage}
+        onClose={() => setNotificationOpen(false)}
+        duration={2000}
       />
     </div>
   )

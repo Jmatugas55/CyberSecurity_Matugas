@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { CheckCircle, XCircle } from "lucide-react"
 
 interface Props {
@@ -5,44 +6,43 @@ interface Props {
   type: "success" | "error"
   message: string
   onClose: () => void
+  duration?: number
 }
 
-export default function Modal({ open, type, message, onClose }: Props) {
+export default function Notification({ open, type, message, onClose, duration = 1000 }: Props) {
+  useEffect(() => {
+    if (!open) return
+    const timer = setTimeout(() => {
+      onClose()
+    }, duration)
+    return () => clearTimeout(timer)
+  }, [open, duration, onClose])
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
-
-      <div className="bg-white w-[90%] max-w-sm rounded-2xl p-6 shadow-xl text-center">
-
-        <div className="flex justify-center mb-4">
-
-          {type === "success" ? (
-            <CheckCircle className="text-green-500 w-14 h-14" />
-          ) : (
-            <XCircle className="text-red-500 w-14 h-14" />
-          )}
-
-        </div>
-
-        <h2 className="text-xl font-semibold mb-2">
-          {type === "success" ? "Success" : "Error"}
-        </h2>
-
-        <p className="text-gray-600 mb-6">
-          {message}
-        </p>
-
-        <button
-          onClick={onClose}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          OK
-        </button>
-
+   <div
+      className={`fixed top-20 right-4 z-50 flex items-center p-4 rounded-2xl shadow-xl border min-w-[320px] max-w-sm transition-all duration-300
+      ${
+        type === "success"
+          ? "bg-gradient-to-r from-green-500 to-emerald-600 border-green-600"
+          : "bg-gradient-to-r from-red-500 to-rose-600 border-red-600"
+      }`}
+    >
+      <div className="mr-3">
+        {type === "success" ? (
+          <CheckCircle className="text-white w-6 h-6" />
+        ) : (
+          <XCircle className="text-white w-6 h-6" />
+        )}
       </div>
 
+      <div>
+        <p className="text-lg font-semibold text-white">
+          {type === "success" ? "Success" : "Error"}
+        </p>
+        <p className="text-md text-white/90 mt-1">{message}</p>
+      </div>
     </div>
   )
 }

@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from "react"
 import {Eye, EyeOff} from "lucide-react"
 
+type ResetPayload = {
+  reset_method: "key" | "question"
+  reset_key?: string
+  security_question?: string
+  security_answer?: string
+}
+
+type FormData = {
+  email: string
+  password: string
+} & ResetPayload
+
 interface Props {
-  onSubmit: (data: { email: string; password: string }) => void
+  onSubmit: (data: FormData) => void
   buttonText: string
   disabled?: boolean
   passwordError?: string
@@ -27,6 +39,12 @@ export default function AuthForm({
   const [localError, setLocalError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [resetMethod, setResetMethod] = useState<"key" | "question">("key")
+  const [resetKey, setResetKey] = useState("")
+  const [securityQuestion, setSecurityQuestion] = useState("")
+  const [securityAnswer, setSecurityAnswer] = useState("")
+  const [keyError, setKeyError] = useState("")
+  const [questionError, setQuestionError] = useState("")
 
   const validateClientPassword = (pwd: string) => {
     if (pwd.length < 8) return "Password must be at least 8 characters";
@@ -99,28 +117,53 @@ export default function AuthForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const err = validateClientPassword(password);
+    const err = validateClientPassword(password)
     if (err) {
-      setLocalError(err);
-      return;
+      setLocalError(err)
+      return
     }
 
     if (password !== confirmPassword) {
-      setLocalError("Passwords do not match");
-      return;
+      setLocalError("Passwords do not match")
+      return
     }
 
-    setLocalError("");
+    if (resetMethod === "key") {
+      if (!resetKey.match(/^[A-Za-z0-9_-]{6,32}$/)) {
+        setKeyError("Key must be 6-32 characters, letters/digits/-/_")
+        return
+      }
+      setKeyError("")
+    } else {
+      if (!securityQuestion.trim()) {
+        setQuestionError("Security question cannot be empty")
+        return
+      }
+      if (securityAnswer.trim().length < 3) {
+        setQuestionError("Security answer must be at least 3 characters")
+        return
+      }
+      setQuestionError("")
+    }
+
+    setLocalError("")
     let outPwd = password
     const encoded = new TextEncoder().encode(outPwd)
     if (encoded.length > 72) {
       outPwd = new TextDecoder().decode(encoded.slice(0, 72))
     }
 
-    onSubmit({
+    const payload: FormData = {
       email: email.trim(),
-      password: outPwd
-    })
+      password: outPwd,
+      reset_method: resetMethod,
+      ...(resetMethod === "key" ? { reset_key: resetKey } : {
+        security_question: securityQuestion,
+        security_answer: securityAnswer,
+      }),
+    }
+
+    onSubmit(payload)
   }
 
   return (
@@ -190,41 +233,92 @@ export default function AuthForm({
           >
             {showConfirm ? <EyeOff /> : <Eye />}
           </span>
-
-          
       </div>
-
-      {password && (
-        <p className="text-xs italic text-gray-600">
-          Strength: <span className="font-semibold">{passwordStrength(password)}</span>
-        </p>
-      )}
-
         </div>
-      </div>
+         {password && (
+              <p className="text-xs italic text-gray-600 text-end">
+                Strength: <span className="font-semibold">{passwordStrength(password)}</span>
+              </p>
+            )}
 
-      {enablePasswordGeneration && (
+            {enablePasswordGeneration && (
           <button
             type="button"
-            className="text-xs text-blue-500 hover:underline mt-1 w-full"
+            className="text-xs text-blue-500 hover:underline mt-1 w-full justify-end self-end"
             onClick={generatePassword}
           >
             Generate strong password
           </button>
         )}
+            {localError && (
+                <p className="text-red-500 text-sm mt-1">
+                  {localError}
+                </p>
+              )}
 
-        {localError && (
-          <p className="text-red-500 text-sm mt-1">
-            {localError}
-          </p>
-        )}
+              {passwordError && !localError && (
+                <p className="text-red-500 text-sm mt-1">
+                  {passwordError}
+                </p>
+              )}
+        <div className="">
+            <label className="text-sm text-gray-600">Reset Method</label>
+            <select
+              value={resetMethod}
+              onChange={(e) => setResetMethod(e.target.value as "key" | "question")}
+              className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            >
+              <option value="key">Reset Key</option>
+              <option value="question">Security Question</option>
+            </select>
+          </div>
+          {resetMethod === "key" ? (
+            <div className="mb-5">
+              <label className="text-sm text-gray-600">Reset Key</label>
+              <input
+                type="text"
+                value={resetKey}
+                onChange={(e) => setResetKey(e.target.value)}
+                placeholder="6-32 letters, digits, - or _"
+                className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              {keyError && <p className="text-red-500 text-sm mt-1">{keyError}</p>}
+            </div>
+          ) : (
+            <div className="">
+              <div>
+                <label className="text-sm text-gray-600">Security Question</label>
+                <select
+                  value={securityQuestion}
+                  onChange={(e) => setSecurityQuestion(e.target.value)}
+                  className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">Select a security question</option>
+                  <option value="What is your mother\'s maiden name?">What is your mother’s maiden name?</option>
+                  <option value="What was your first pet\'s name?">What was your first pet’s name?</option>
+                  <option value="What was the name of your first school?">What was the name of your first school?</option>
+                  <option value="What is your favorite color?">What is your favorite color?</option>
+                  <option value="What city were you born in?">What city were you born in?</option>
+                </select>
+              </div>
 
-        {passwordError && !localError && (
-          <p className="text-red-500 text-sm mt-1">
-            {passwordError}
-          </p>
-        )}
-    
+              <div className="">
+                <label className="text-sm text-white-600">Security Answer</label>
+                <input
+                  type="text"
+                  value={securityAnswer}
+                  onChange={(e) => setSecurityAnswer(e.target.value)}
+                  placeholder="Enter your answer"
+                  className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700" 
+                />
+              </div>
+
+              {questionError && ( 
+                <p className="text-red-500 text-sm">{questionError}</p>
+              )}
+            </div>
+          )}
+      </div>
       <button
         type="submit"
         disabled={

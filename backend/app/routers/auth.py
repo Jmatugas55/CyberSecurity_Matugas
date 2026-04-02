@@ -11,7 +11,7 @@ from ..utils import get_db, validate_password
 
 router = APIRouter()
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 5
 BLOCK_MINUTES = 15
 
 @router.post("/register", response_model=schemas.UserOut)
@@ -134,18 +134,6 @@ def login(user: schemas.UserLogin, request: Request, db: Session = Depends(get_d
     db.commit()
 
     return {"message": "Login successful"}
-
-@router.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    users = db.query(crud.models.User).all()
-
-    return [
-        {
-            "id": user.id,
-            "email": user.email
-        }
-        for user in users
-    ]
 
 
 @router.get("/security-question")

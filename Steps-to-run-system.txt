@@ -6,6 +6,7 @@ backend side :
 4 - uvicorn app.main:app --reload
 
 Frontend side : 
+
 1 - open terminal
 2 - cd Frontend
 3 - npm run dev

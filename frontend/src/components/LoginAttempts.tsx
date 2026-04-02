@@ -1,19 +1,11 @@
 import { useEffect, useState } from "react"
-import {
-  getLoginAttempts,
-  getBlockedUsers,
-  unblockUser,
-  resetFailedAttempts,
-} from "../api/api"
+import { getLoginAttempts, getBlockedUsers, unblockUser, resetFailedAttempts} from "../api/api"
 import type { LoginSummary, BlockedUser, AttemptFilter } from "../types"
-import { FaHome } from "react-icons/fa"
-import { useNavigate } from "react-router-dom"
 
 export default function LoginAttempts() {
   const [attempts, setAttempts] = useState<LoginSummary[]>([])
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([])
   const [filter, setFilter] = useState<AttemptFilter>("all")
-  const navigate = useNavigate()
 
   useEffect(() => {
     loadData()
@@ -24,7 +16,7 @@ export default function LoginAttempts() {
       const data = await getBlockedUsers()
       setBlockedUsers(data || [])
     } else {
-      const data = await getLoginAttempts("all") // fetch all, filter locally
+      const data = await getLoginAttempts("all") 
       setAttempts(data || [])
     }
   }
@@ -39,7 +31,6 @@ export default function LoginAttempts() {
     loadData()
   }
 
-  // Filter attempts based on selected filter
   const filteredAttempts = attempts.filter((a) => {
     if (filter === "all") return true
     if (filter === "success") return a.success > 0
@@ -48,17 +39,9 @@ export default function LoginAttempts() {
   })
 
   return (
-    <div className="w-full max-w-6xl mx-auto bg-gray-900 text-white shadow-2xl rounded-2xl p-6 border border-gray-700 mt-8">
-
-      {/* Header */}
+    <div className="w-full mx-auto bg-gray-900 text-white shadow-2xl rounded-2xl p-6 border border-gray-700">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-5">
-          <span
-            className="text-gray-300 bg-transparent border-none outline-none shadow-none p-0 hover:bg-transparent cursor-pointer text-3xl"
-            onClick={() => navigate(-1)}
-          >
-            <FaHome />
-          </span>
           <h2 className="text-2xl font-bold">Login Attempts</h2>
         </div>
 
@@ -76,8 +59,6 @@ export default function LoginAttempts() {
           </select>
         </div>
       </div>
-
-      {/* Table */}
       <div className="overflow-hidden rounded-xl border border-gray-700">
         <table className="w-full text-left">
           <thead className="bg-gray-800 text-gray-300 text-sm">
