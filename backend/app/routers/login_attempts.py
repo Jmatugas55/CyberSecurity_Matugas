@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
+from datetime import datetime
+
 from .. import database
-from ..models import LoginAttempt
+from ..models import LoginAttempt, User
 
 router = APIRouter()
+
 
 def get_db():
     db = database.SessionLocal()
@@ -13,13 +16,26 @@ def get_db():
     finally:
         db.close()
 
+
 @router.get("/login-attempts")
-def get_login_attempts(filter: str | None = Query(None, description="all, failed, success"),
+def get_login_attempts(filter: str | None = Query(None, description="all|failed|success"),
                        db: Session = Depends(get_db)):
+    """Returns aggregated success/failed counts per email.
+
+    Filtering rules:
+      - "all" or no filter: every email that has any attempts
+      - "success": only emails with success_count > 0  (and failed/blocked rows are hidden)
+      - "failed":  only emails with failed_count > 0   (and success/blocked rows are hidden)
+    The frontend uses success_count/failed_count to drive its UI; emails whose
+    counts don't match the filter are dropped on this server side.
+    """
+    success_sum = func.sum(case((LoginAttempt.success == True, 1), else_=0)).label("success_count")
+    failed_sum = func.sum(case((LoginAttempt.success == False, 1), else_=0)).label("failed_count")
+
     agg = db.query(
         LoginAttempt.email,
-        func.sum(case((LoginAttempt.success == True, 1), else_=0)).label("success_count"),
-        func.sum(case((LoginAttempt.success == False, 1), else_=0)).label("failed_count"),
+        success_sum,
+        failed_sum,
     ).group_by(LoginAttempt.email)
 
     if filter == "failed":
@@ -31,16 +47,15 @@ def get_login_attempts(filter: str | None = Query(None, description="all, failed
     for row in agg:
         result.append({
             "email": row.email,
-            "success": row.success_count,
-            "failed": row.failed_count,
+            "success": int(row.success_count or 0),
+            "failed": int(row.failed_count or 0),
         })
     return result
+
 
 @router.get("/blocked-users")
 def get_blocked_users(db: Session = Depends(get_db)):
     """Return users whose account is currently locked due to failed logins."""
-    from datetime import datetime
-    from ..models import User
     now = datetime.utcnow()
     users = db.query(User).filter(User.blocked_until != None, User.blocked_until > now).all()
     return [
@@ -48,9 +63,9 @@ def get_blocked_users(db: Session = Depends(get_db)):
         for u in users
     ]
 
+
 @router.post("/unblock-user/{user_id}")
 def unblock_user(user_id: int, db: Session = Depends(get_db)):
-    from ..models import User, LoginAttempt
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -59,6 +74,7 @@ def unblock_user(user_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "User unblocked"}
 
+
 @router.delete("/login-attempts/{attempt_id}")
 def delete_login_attempt(attempt_id: int, db: Session = Depends(get_db)):
     attempt = db.query(LoginAttempt).filter(LoginAttempt.id == attempt_id).first()
@@ -66,15 +82,33 @@ def delete_login_attempt(attempt_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Attempt not found")
     db.delete(attempt)
     db.commit()
-    return {"message": "Login attempt deleted"}@router.post("/login-a   `ttempts/reset-failed/{email}")
+    return {"message": "Login attempt deleted"}
+
 
 @router.post("/login-attempts/reset-failed/{email}")
 def reset_failed_attempts(email: str, db: Session = Depends(get_db)):
     db.query(LoginAttempt).filter(
         LoginAttempt.email == email,
-        LoginAttempt.success == False
+        LoginAttempt.success == False,
     ).delete()
-    from ..models import User
     db.query(User).filter(User.email == email).update({"blocked_until": None})
     db.commit()
     return {"message": "Failed attempts reset and user unlocked"}
+
+
+@router.post("/login-attempts/reset-success/{email}")
+def reset_success_attempts(email: str, db: Session = Depends(get_db)):
+    db.query(LoginAttempt).filter(
+        LoginAttempt.email == email,
+        LoginAttempt.success == True,
+    ).delete()
+    db.commit()
+    return {"message": "Success attempts cleared"}
+
+
+@router.post("/login-attempts/reset-all/{email}")
+def reset_all_attempts(email: str, db: Session = Depends(get_db)):
+    db.query(LoginAttempt).filter(LoginAttempt.email == email).delete()
+    db.query(User).filter(User.email == email).update({"blocked_until": None})
+    db.commit()
+    return {"message": "All login attempts cleared and user unlocked"}

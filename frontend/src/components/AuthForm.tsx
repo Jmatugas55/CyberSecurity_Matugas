@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from "react"
-import {Eye, EyeOff} from "lucide-react"
+import React, { useMemo, useState } from "react"
+import { Eye, EyeOff } from "lucide-react"
+import type { Role } from "../types"
 
-type ResetPayload = {
-  reset_method: "key" | "question"
-  reset_key?: string
-  security_question?: string
-  security_answer?: string
-}
-
-type FormData = {
+export type RegisterBasics = {
   email: string
   password: string
-} & ResetPayload
+  role: Role
+  name: string
+  specialization?: string
+  contact_number?: string
+}
 
 interface Props {
-  onSubmit: (data: FormData) => void
+  role: Role
+  onRoleChange: (role: Role) => void
+  onSubmit: (data: RegisterBasics) => void
   buttonText: string
   disabled?: boolean
   passwordError?: string
@@ -24,6 +24,8 @@ interface Props {
 }
 
 export default function AuthForm({
+  role,
+  onRoleChange,
   onSubmit,
   buttonText,
   passwordError,
@@ -32,191 +34,203 @@ export default function AuthForm({
   initialPassword = "",
   enablePasswordGeneration = false,
 }: Props) {
+  const [name, setName] = useState("")
+  const [specialization, setSpecialization] = useState("")
+  const [contact, setContact] = useState("")
 
   const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState(initialPassword)
   const [confirmPassword, setConfirmPassword] = useState(initialPassword)
-  const [localError, setLocalError] = useState("")
+  const [submitError, setSubmitError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [resetMethod, setResetMethod] = useState<"key" | "question">("key")
-  const [resetKey, setResetKey] = useState("")
-  const [securityQuestion, setSecurityQuestion] = useState("")
-  const [securityAnswer, setSecurityAnswer] = useState("")
-  const [keyError, setKeyError] = useState("")
-  const [questionError, setQuestionError] = useState("")
 
-  const validateClientPassword = (pwd: string) => {
-    if (pwd.length < 8) return "Password must be at least 8 characters";
-    if (!/[A-Z]/.test(pwd)) return "Must include at least one uppercase letter";
-    if (!/[a-z]/.test(pwd)) return "Must include at least one lowercase letter";
-    if (!/[0-9]/.test(pwd)) return "Must include at least one number";
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return "Must include a special character";
-    return "";
-  };
-  const passwordStrength = (pwd: string) => {
-    let score = 0;
-    if (pwd.length >= 8) score++;
-    if (/[A-Z]/.test(pwd)) score++;
-    if (/[a-z]/.test(pwd)) score++;
-    if (/[0-9]/.test(pwd)) score++;
-    if (/[!@#$%^&*(),.?\":{}|<>]/.test(pwd)) score++;
-
-    if (score <= 2) return "Weak";
-    if (score === 3 || score === 4) return "Medium";
-    return "Strong";
-  };
-
-  useEffect(() => {
-    if (!password && !confirmPassword) {
-      setLocalError("");
-      return;
-    }
-    const enc = new TextEncoder().encode(password);
+  const handlePasswordChange = (value: string) => {
+    const enc = new TextEncoder().encode(value)
     if (enc.length > 72) {
-      const truncated = new TextDecoder().decode(enc.slice(0, 72));
-      setPassword(truncated);
-      setConfirmPassword(truncated);
-      setLocalError("Password too long, truncated to 72 bytes");
-      return;
-    }
-    const err = validateClientPassword(password);
-    if (err) {
-      setLocalError(err);
-      return;
-    }
-    if (password !== confirmPassword) {
-      setLocalError("Passwords do not match");
-      return;
-    }
-    setLocalError("");
-  }, [password, confirmPassword]);
-
-  const generatePassword = () => {
-    const length = 12; 
-    const lower = 'abcdefghijklmnopqrstuvwxyz';
-    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const nums = '0123456789';
-    const special = '!@#$%^&*()_+{}[]<>?,.';
-    const all = lower + upper + nums + special;
-    let pwd = '';
-    pwd += lower[Math.floor(Math.random() * lower.length)];
-    pwd += upper[Math.floor(Math.random() * upper.length)];
-    pwd += nums[Math.floor(Math.random() * nums.length)];
-    pwd += special[Math.floor(Math.random() * special.length)];
-    for (let i = pwd.length; i < length; i++) {
-      pwd += all[Math.floor(Math.random() * all.length)];
-    }
-    pwd = pwd.split('').sort(() => 0.5 - Math.random()).join('');
-    if (new TextEncoder().encode(pwd).length > 72) {
-      pwd = pwd.slice(0, 72);
-    }
-    setPassword(pwd);
-    setConfirmPassword(pwd);
-  };
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const err = validateClientPassword(password)
-    if (err) {
-      setLocalError(err)
+      const truncated = new TextDecoder().decode(enc.slice(0, 72))
+      setPassword(truncated)
       return
     }
-
-    if (password !== confirmPassword) {
-      setLocalError("Passwords do not match")
-      return
-    }
-
-    if (resetMethod === "key") {
-      if (!resetKey.match(/^[A-Za-z0-9_-]{6,32}$/)) {
-        setKeyError("Key must be 6-32 characters, letters/digits/-/_")
-        return
-      }
-      setKeyError("")
-    } else {
-      if (!securityQuestion.trim()) {
-        setQuestionError("Security question cannot be empty")
-        return
-      }
-      if (securityAnswer.trim().length < 3) {
-        setQuestionError("Security answer must be at least 3 characters")
-        return
-      }
-      setQuestionError("")
-    }
-
-    setLocalError("")
-    let outPwd = password
-    const encoded = new TextEncoder().encode(outPwd)
-    if (encoded.length > 72) {
-      outPwd = new TextDecoder().decode(encoded.slice(0, 72))
-    }
-
-    const payload: FormData = {
-      email: email.trim(),
-      password: outPwd,
-      reset_method: resetMethod,
-      ...(resetMethod === "key" ? { reset_key: resetKey } : {
-        security_question: securityQuestion,
-        security_answer: securityAnswer,
-      }),
-    }
-
-    onSubmit(payload)
+    setPassword(value)
   }
 
+  const validatePwd = (pwd: string) => {
+    if (pwd.length < 8) return "Password must be at least 8 characters"
+    if (!/[A-Z]/.test(pwd)) return "Must include at least one uppercase letter"
+    if (!/[a-z]/.test(pwd)) return "Must include at least one lowercase letter"
+    if (!/[0-9]/.test(pwd)) return "Must include at least one number"
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return "Must include a special character"
+    return ""
+  }
+
+  const passwordIssue = useMemo(() => {
+    if (!password && !confirmPassword) return ""
+    const err = validatePwd(password)
+    if (err) return err
+    if (password !== confirmPassword) return "Passwords do not match"
+    return ""
+  }, [password, confirmPassword])
+
+  const strengthLabel = useMemo(() => {
+    if (!password) return ""
+    let score = 0
+    if (password.length >= 8) score++
+    if (/[A-Z]/.test(password)) score++
+    if (/[a-z]/.test(password)) score++
+    if (/[0-9]/.test(password)) score++
+    if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score++
+    if (score <= 2) return "Weak"
+    if (score <= 4) return "Medium"
+    return "Strong"
+  }, [password])
+
+  const strengthBar = useMemo(() => {
+    if (strengthLabel === "Strong") return { width: "100%", color: "bg-emerald-500" }
+    if (strengthLabel === "Medium") return { width: "66%", color: "bg-amber-400" }
+    if (strengthLabel === "Weak") return { width: "33%", color: "bg-rose-500" }
+    return { width: "0%", color: "bg-slate-300" }
+  }, [strengthLabel])
+
+  const generatePassword = () => {
+    const length = 12
+    const lower = "abcdefghijklmnopqrstuvwxyz"
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    const nums = "0123456789"
+    const special = "!@#$%^&*()_+{}[]<>?,."
+    const all = lower + upper + nums + special
+    let pwd = ""
+    pwd += lower[Math.floor(Math.random() * lower.length)]
+    pwd += upper[Math.floor(Math.random() * upper.length)]
+    pwd += nums[Math.floor(Math.random() * nums.length)]
+    pwd += special[Math.floor(Math.random() * special.length)]
+    for (let i = pwd.length; i < length; i++) pwd += all[Math.floor(Math.random() * all.length)]
+    pwd = pwd.split("").sort(() => 0.5 - Math.random()).join("")
+    setPassword(pwd)
+    setConfirmPassword(pwd)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return setSubmitError("Full name is required")
+    if (role === "doctor" && !specialization.trim())
+      return setSubmitError("Specialization is required for doctors")
+    if (role === "patient" && !contact.trim())
+      return setSubmitError("Contact number is required for patients")
+
+    const err = validatePwd(password)
+    if (err) return setSubmitError(err)
+    if (password !== confirmPassword) return setSubmitError("Passwords do not match")
+
+    setSubmitError("")
+    onSubmit({
+      email: email.trim(),
+      password,
+      role,
+      name: name.trim(),
+      specialization: role === "doctor" ? specialization.trim() : undefined,
+      contact_number: role === "patient" ? contact.trim() : undefined,
+    })
+  }
+
+  const inputBase =
+    "w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200 shadow-inner hover:bg-white"
+
+  const labelBase = "block text-sm font-semibold text-slate-700 mb-1.5"
+
   return (
+    <form onSubmit={handleSubmit} className="space-y-5 w-full">
+      <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100">
+        {(["patient", "doctor"] as const).map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => onRoleChange(r)}
+            className={`py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+              role === r
+                ? "bg-white text-blue-700 shadow-md ring-1 ring-blue-100"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {r === "patient" ? "Patient" : "Doctor"}
+          </button>
+        ))}
+      </div>
 
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-5 w-full"
-    >
+      <div>
+        <label className={labelBase}>Full Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          placeholder={role === "doctor" ? "e.g. Dr. Jane Doe" : "e.g. John Smith"}
+          className={inputBase}
+        />
+      </div>
 
-      <div className="flex flex-col">
-        <label className="text-sm text-gray-600 mb-1">
-          Email Address
-        </label>
+      {role === "doctor" ? (
+        <div>
+          <label className={labelBase}>Specialization</label>
+          <input
+            type="text"
+            value={specialization}
+            onChange={(e) => setSpecialization(e.target.value)}
+            placeholder="e.g. Cardiology"
+            className={inputBase}
+          />
+        </div>
+      ) : (
+        <div>
+          <label className={labelBase}>Contact Number</label>
+          <input
+            type="text"
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            placeholder="e.g. 09171234567"
+            className={inputBase}
+          />
+        </div>
+      )}
 
+      <div>
+        <label className={labelBase}>Email Address</label>
         <input
           type="email"
           placeholder="example@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="text-black px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          className={inputBase}
         />
       </div>
 
-      <div className="flex flex-col">
-        <label className="text-sm text-gray-600 mb-1">
-          Password
-        </label>
-
-        <div className="relative w-full">
+      <div>
+        <label className={labelBase}>Password</label>
+        <div className="relative">
           <input
             type={showPassword ? "text" : "password"}
             placeholder="Enter your password"
             value={password}
             maxLength={72}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => handlePasswordChange(e.target.value)}
             required
-            className="w-full text-black px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className={`${inputBase} pr-12`}
           />
-          <span
+          <button
+            type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-600 bg-transparent outline-none shadow-none cursor-pointer"
-                style={{ background: "none" }}
+            className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500 hover:text-slate-700"
+            aria-label={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? <EyeOff /> : <Eye />}
-          </span>
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
         </div>
+       
+      </div>
 
-        
-      <div className="flex flex-col">
-        <label className="text-sm text-gray-600 mb-1">
-          Confirm Password
-        </label>
+      <div>
+        <label className={labelBase}>Confirm Password</label>
         <div className="relative">
           <input
             type={showConfirm ? "text" : "password"}
@@ -225,113 +239,54 @@ export default function AuthForm({
             maxLength={72}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full text-black px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className={`${inputBase} pr-12`}
           />
-          <span
-            onClick={() => setShowConfirm(!showConfirm)}
-            className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-600 cursor-pointer"
-          >
-            {showConfirm ? <EyeOff /> : <Eye />}
-          </span>
-      </div>
-        </div>
-         {password && (
-              <p className="text-xs italic text-gray-600 text-end">
-                Strength: <span className="font-semibold">{passwordStrength(password)}</span>
-              </p>
-            )}
-
-            {enablePasswordGeneration && (
           <button
             type="button"
-            className="text-xs text-blue-500 hover:underline mt-1 w-full justify-end self-end"
+            onClick={() => setShowConfirm(!showConfirm)}
+            className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500 hover:text-slate-700"
+            aria-label={showConfirm ? "Hide password" : "Show password"}
+          >
+            {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+         {password && (
+          <div className="mt-2">
+            <div className="h-1 w-full rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${strengthBar.color}`}
+                style={{ width: strengthBar.width }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Strength: <span className="font-semibold text-slate-700">{strengthLabel}</span>
+            </p>
+          </div>
+        )}
+        {enablePasswordGeneration && (
+          <button
+            type="button"
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 mt-2"
             onClick={generatePassword}
           >
             Generate strong password
           </button>
         )}
-            {localError && (
-                <p className="text-red-500 text-sm mt-1">
-                  {localError}
-                </p>
-              )}
-
-              {passwordError && !localError && (
-                <p className="text-red-500 text-sm mt-1">
-                  {passwordError}
-                </p>
-              )}
-        <div className="">
-            <label className="text-sm text-gray-600">Reset Method</label>
-            <select
-              value={resetMethod}
-              onChange={(e) => setResetMethod(e.target.value as "key" | "question")}
-              className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="key">Reset Key</option>
-              <option value="question">Security Question</option>
-            </select>
-          </div>
-          {resetMethod === "key" ? (
-            <div className="mb-5">
-              <label className="text-sm text-gray-600">Reset Key</label>
-              <input
-                type="text"
-                value={resetKey}
-                onChange={(e) => setResetKey(e.target.value)}
-                placeholder="6-32 letters, digits, - or _"
-                className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-              {keyError && <p className="text-red-500 text-sm mt-1">{keyError}</p>}
-            </div>
-          ) : (
-            <div className="">
-              <div>
-                <label className="text-sm text-gray-600">Security Question</label>
-                <select
-                  value={securityQuestion}
-                  onChange={(e) => setSecurityQuestion(e.target.value)}
-                  className="text-gray-700 mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="">Select a security question</option>
-                  <option value="What is your mother\'s maiden name?">What is your mother’s maiden name?</option>
-                  <option value="What was your first pet\'s name?">What was your first pet’s name?</option>
-                  <option value="What was the name of your first school?">What was the name of your first school?</option>
-                  <option value="What is your favorite color?">What is your favorite color?</option>
-                  <option value="What city were you born in?">What city were you born in?</option>
-                </select>
-              </div>
-
-              <div className="">
-                <label className="text-sm text-white-600">Security Answer</label>
-                <input
-                  type="text"
-                  value={securityAnswer}
-                  onChange={(e) => setSecurityAnswer(e.target.value)}
-                  placeholder="Enter your answer"
-                  className="mt-1 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700" 
-                />
-              </div>
-
-              {questionError && ( 
-                <p className="text-red-500 text-sm">{questionError}</p>
-              )}
-            </div>
-          )}
+        
+        {(submitError || passwordIssue || passwordError) && (
+          <p className="text-rose-600 text-sm mt-2">
+            {submitError || passwordIssue || passwordError}
+          </p>
+        )}
       </div>
+
       <button
         type="submit"
-        disabled={
-          !!localError ||
-          !email ||
-          !password ||
-          !confirmPassword ||
-          disabled
-        }
-        className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={!!passwordIssue || !email || !password || !confirmPassword || disabled}
+        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {buttonText}
       </button>
-    </form> 
+    </form>
   )
 }

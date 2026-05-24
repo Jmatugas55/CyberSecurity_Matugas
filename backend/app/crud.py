@@ -3,10 +3,12 @@ from . import models
 from .security import hash_password
 from datetime import datetime
 
+
 def create_user(
     db: Session,
     email: str,
     password: str,
+    role: str = "patient",
     reset_method: str = "key",
     reset_key: str | None = None,
     security_question: str | None = None,
@@ -21,8 +23,11 @@ def create_user(
 
     hashed_password = hash_password(password)
 
-    if reset_method not in ("key", "question"):
-        raise ValueError("reset_method must be 'key' or 'question'")
+    if role not in ("doctor", "patient"):
+        raise ValueError("role must be 'doctor' or 'patient'")
+
+    if reset_method not in ("key", "question", "face"):
+        raise ValueError("reset_method must be 'key', 'question' or 'face'")
 
     if reset_method == "key":
         if not reset_key:
@@ -36,9 +41,15 @@ def create_user(
         reset_key = None
         security_answer = hash_password(security_answer)
 
+    if reset_method == "face":
+        reset_key = None
+        security_question = None
+        security_answer = None
+
     user = models.User(
         email=email,
         password=hashed_password,
+        role=role,
         reset_method=reset_method,
         reset_key=reset_key,
         security_question=security_question,
@@ -53,7 +64,6 @@ def create_user(
 
 
 def get_user_by_email(db: Session, email: str):
-    
     return db.query(models.User).filter(models.User.email == email).first()
 
 
@@ -85,3 +95,36 @@ def update_user_password(db: Session, user: models.User, new_password: str):
     user.password = hash_password(new_password)
     db.commit()
     return user
+
+
+def update_user_email(db: Session, user: models.User, new_email: str):
+    existing = db.query(models.User).filter(models.User.email == new_email).first()
+    if existing and existing.id != user.id:
+        raise ValueError("Email already in use")
+    user.email = new_email
+    db.commit()
+    return user
+
+
+def create_doctor_profile(db: Session, user_id: int, name: str, specialization: str):
+    doc = models.Doctor(user_id=user_id, name=name, specialization=specialization)
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def create_patient_profile(db: Session, user_id: int, name: str, contact_number: str):
+    pat = models.Patient(user_id=user_id, name=name, contact_number=contact_number)
+    db.add(pat)
+    db.commit()
+    db.refresh(pat)
+    return pat
+
+
+def get_doctor_by_user_id(db: Session, user_id: int):
+    return db.query(models.Doctor).filter(models.Doctor.user_id == user_id).first()
+
+
+def get_patient_by_user_id(db: Session, user_id: int):
+    return db.query(models.Patient).filter(models.Patient.user_id == user_id).first()

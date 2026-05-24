@@ -1,23 +1,59 @@
-import LoginAttempts from "./components/LoginAttempts"
-import Dashboard from "./pages/Dashboard"
+import type { ReactElement } from "react"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
 import ForgotPassword from "./pages/ForgotPassword"
-import {BrowserRouter, Route, Routes} from "react-router-dom"
+import DoctorDashboard from "./pages/DoctorDashboard"
+import PatientDashboard from "./pages/PatientDashboard"
+import { getRole } from "./session"
+import { ThemeProvider } from "./theme"
+import Homepage from "./pages/Homepage"
 
-function App() {
+function RequireRole({ role, children }: { role: "doctor" | "patient"; children: ReactElement }) {
+  const r = getRole()
+  if (!r) return <Navigate to="/" replace />
+  if (r !== role) return <Navigate to={r === "doctor" ? "/doctor" : "/patient"} replace />
+  return children
+}
 
+export default function App() {
   return (
+    <ThemeProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Login />}  />
-          <Route path="/register" element={<Register />}  />
-          <Route path="/forgot" element={<ForgotPassword />}  />
-          <Route path="/dashboard" element={<Dashboard />}  />
-          <Route path="/loginAttempts" element={<LoginAttempts />}  />
+          <Route path="/" element={<Homepage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot" element={<ForgotPassword />} />
+          <Route
+            path="/doctor"
+            element={
+              <RequireRole role="doctor">
+                <DoctorDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/patient"
+            element={
+              <RequireRole role="patient">
+                <PatientDashboard />
+              </RequireRole>
+            }
+          />
+          {/* legacy */}
+          <Route
+            path="/dashboard"
+            element={<RoleRedirect />}
+          />
         </Routes>
       </BrowserRouter>
+    </ThemeProvider>
   )
 }
 
-export default App
+function RoleRedirect() {
+  const r = getRole()
+  if (!r) return <Navigate to="/" replace />
+  return <Navigate to={r === "doctor" ? "/doctor" : "/patient"} replace />
+}
