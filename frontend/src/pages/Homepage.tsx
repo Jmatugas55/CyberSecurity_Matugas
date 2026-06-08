@@ -7,7 +7,6 @@ import {
   Lock,
   BellRing,
   CalendarDays,
-  Users,
   Activity,
   Mail,
   Phone,
@@ -22,22 +21,149 @@ import {
   Sun,
   Moon,
   Menu,
+  Code2,
+  FileText,
+  GitBranch,
+  Palette,
+  SearchCheck,
+  TestTube2,
 } from "lucide-react";
 
 /* =========================
    Data
 ========================= */
 
-const teamMembers = [
-  { name: "Julito P. Matugas Jr.", role: "Project Lead" },
-  { name: "Lebron James Sarra", role: "Developer" },
-  { name: "Karl Pingcalan", role: "Developer" },
-  { name: "Marwin Boong", role: "Developer" },
-  { name: "Ijay Mangguinimba", role: "Developer" },
-  { name: "Shane Andoy", role: "Developer" },
-  { name: "Mike Quijano", role: "Developer" },
-  { name: "Cherry Havana", role: "Developer" },
-  { name: "Laurence Montil", role: "Developer" },
+type TeamMember = {
+  name: string;
+  role: string;
+  label: string;
+  icon: React.ElementType;
+  photoFile: string;
+};
+
+const teamPhotoModules = import.meta.glob("../assets/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  import: "default",
+  query: "?url",
+}) as Record<string, string>;
+
+function getTeamPhoto(fileName: string) {
+  return teamPhotoModules[`../assets/${fileName}`];
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getAvatarImage(member: TeamMember, level: "lead" | "second" | "support") {
+  const initials = getInitials(member.name);
+  const fontSize = level === "lead" ? 34 : level === "second" ? 28 : 24;
+  const iconSize = level === "lead" ? 42 : level === "second" ? 34 : 30;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ccfbf1"/>
+          <stop offset="48%" stop-color="#dbeafe"/>
+          <stop offset="100%" stop-color="#99f6e4"/>
+        </linearGradient>
+        <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#14b8a6"/>
+          <stop offset="100%" stop-color="#2563eb"/>
+        </linearGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f766e" flood-opacity="0.20"/>
+        </filter>
+      </defs>
+      <rect width="320" height="320" rx="58" fill="url(#bg)"/>
+      <circle cx="160" cy="125" r="${iconSize}" fill="url(#accent)" filter="url(#shadow)"/>
+      <path d="M116 235c8-37 32-58 44-58s36 21 44 58" fill="none" stroke="#0f766e" stroke-width="16" stroke-linecap="round"/>
+      <circle cx="160" cy="116" r="22" fill="#ffffff"/>
+      <text x="160" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="800" fill="#0f766e">${initials}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+const developer: TeamMember = {
+  name: "Julito Matugas",
+  role: "Developer",
+  label: "Core Developer",
+  icon: Code2,
+  photoFile: "me.png",
+};
+
+const secondLevelMembers: TeamMember[] = [
+  {
+    name: "Mike Quijano",
+    role: "Assistant Developer / System Support",
+    label: "Technical Support",
+    icon: GitBranch,
+    photoFile: "mike-quijano.png",
+  },
+  {
+    name: "Laurence Montil",
+    role: "UI/UX and Documentation Support",
+    label: "Design Support",
+    icon: Palette,
+    photoFile: "lawrence.jpg",
+  },
+];
+
+const supportTeams: TeamMember[][] = [
+  [
+    {
+      name: "Lebron James Sarra",
+      role: "Documentation Support",
+      label: "Project Support",
+      icon: FileText,
+      photoFile: "lebron.jpg",
+    },
+    {
+      name: "Karl Pingcalan",
+      role: "Testing Support",
+      label: "Quality Support",
+      icon: TestTube2,
+      photoFile: "Karl.jpg",
+    },
+    {
+      name: "Marwin Boong",
+      role: "Research Support",
+      label: "Project Support",
+      icon: SearchCheck,
+      photoFile: "marwin.png",
+    },
+  ],
+  [
+    {
+      name: "Ijay Mangguinimba",
+      role: "Data Gathering Support",
+      label: "Project Support",
+      icon: FileText,
+      photoFile: "Ijay.jpg",
+    },
+    {
+      name: "Shane Andoy",
+      role: "System Evaluation Support",
+      label: "Evaluation Support",
+      icon: TestTube2,
+      photoFile: "shane.jpg",
+    },
+    {
+      name: "Cherry Havana",
+      role: "Documentation and Review Support",
+      label: "Project Support",
+      icon: SearchCheck,
+      photoFile: "cherry.png",
+    },
+  ],
 ];
 
 const features = [
@@ -216,6 +342,209 @@ function PrimaryButton({
     >
       {children}
     </Link>
+  );
+}
+
+function TeamNode({
+  member,
+  theme,
+  level = "support",
+  delay = 0,
+}: {
+  member: TeamMember;
+  theme: ReturnType<typeof getTheme>;
+  level?: "lead" | "second" | "support";
+  delay?: number;
+}) {
+  const Icon = member.icon;
+  const isLead = level === "lead";
+  const isSecond = level === "second";
+  const isSupport = level === "support";
+  const photoSrc = getTeamPhoto(member.photoFile);
+  const avatarSrc = photoSrc || getAvatarImage(member, level);
+
+  return (
+    <motion.article
+      variants={fadeUp}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      transition={{ duration: 0.55, delay }}
+      whileHover={{ y: -8 }}
+      className={cn(
+        "group relative mx-auto w-full overflow-visible rounded-[2rem] border shadow-xl transition duration-300",
+        isLead ? "max-w-3xl p-8 text-left md:p-9" : isSecond ? "max-w-xl p-6 text-left" : "p-5 text-center",
+        isLead
+          ? theme.isDark
+            ? "border-teal-300/60 bg-gradient-to-br from-teal-400/20 via-white/[0.07] to-blue-500/20 shadow-teal-500/20 hover:border-teal-200"
+            : "border-teal-300 bg-gradient-to-br from-white via-teal-50 to-blue-50 shadow-teal-200/80 hover:border-teal-500"
+          : theme.card
+      )}
+    >
+      <div
+        className={cn(
+          "absolute right-5 top-5 rounded-full border px-3 py-1 text-xs font-bold",
+          isLead
+            ? "border-teal-300/60 bg-teal-500 text-white"
+            : theme.badge
+        )}
+      >
+        {member.label}
+      </div>
+
+      <div
+        className={cn(
+          "flex flex-col gap-6",
+          isSupport ? "items-center pt-7" : "sm:flex-row sm:items-center"
+        )}
+      >
+        <div
+          className={cn(
+            "relative z-10 flex shrink-0 items-center justify-center overflow-hidden rounded-3xl border-4 shadow-2xl transition duration-300 group-hover:-translate-y-5 group-hover:scale-125 group-hover:shadow-teal-500/30",
+            isLead ? "h-40 w-40" : isSecond ? "h-32 w-32" : "h-28 w-28",
+            theme.isDark
+              ? "border-teal-300/40 bg-slate-950"
+              : "border-teal-300 bg-white"
+          )}
+        >
+          <img
+            src={avatarSrc}
+            alt={`${member.name} profile`}
+            className="h-full w-full object-cover"
+          />
+        </div>
+
+        <div className={cn("min-w-0", isSupport ? "w-full px-1" : "pr-20 sm:pr-0")}>
+          <div
+            className={cn(
+              "mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-blue-600 text-white shadow-lg shadow-teal-500/25",
+              isSupport && "mx-auto"
+            )}
+          >
+            <Icon size={22} />
+          </div>
+          <h3
+            className={cn(
+              "font-black leading-tight",
+              isLead ? "text-3xl md:text-4xl" : isSecond ? "text-2xl" : "text-xl",
+              theme.heading
+            )}
+          >
+            {member.name}
+          </h3>
+          <p className="mt-1 font-bold text-teal-500">{member.role}</p>
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
+function ConnectorLine({
+  className,
+  theme,
+  direction = "down",
+}: {
+  className?: string;
+  theme: ReturnType<typeof getTheme>;
+  direction?: "down" | "left" | "right";
+}) {
+  const arrowPosition =
+    direction === "down"
+      ? "left-1/2 top-full -translate-x-1/2 border-x-[9px] border-t-[12px] border-x-transparent"
+      : direction === "left"
+      ? "right-full top-1/2 -translate-y-1/2 border-y-[9px] border-r-[12px] border-y-transparent"
+      : "left-full top-1/2 -translate-y-1/2 border-y-[9px] border-l-[12px] border-y-transparent";
+  const arrowColor =
+    direction === "down"
+      ? theme.isDark ? "border-t-teal-300" : "border-t-teal-600"
+      : direction === "left"
+      ? theme.isDark ? "border-r-teal-300" : "border-r-teal-600"
+      : theme.isDark ? "border-l-teal-300" : "border-l-teal-600";
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute hidden rounded-full md:block",
+        theme.isDark
+          ? "bg-gradient-to-b from-teal-300 to-blue-400 shadow-[0_0_18px_rgba(45,212,191,0.35)]"
+          : "bg-gradient-to-b from-teal-600 to-blue-600 shadow-[0_0_16px_rgba(13,148,136,0.22)]",
+        className
+      )}
+    >
+      <span className={cn("absolute h-0 w-0", arrowPosition, arrowColor)} />
+    </div>
+  );
+}
+
+function TeamHierarchy({ theme }: { theme: ReturnType<typeof getTheme> }) {
+  return (
+    <div className="relative mt-16">
+      <div
+        className={cn(
+          "pointer-events-none absolute left-1/2 top-48 hidden h-[calc(100%-12rem)] w-[3px] -translate-x-1/2 rounded-full md:block",
+          theme.isDark ? "bg-teal-300/25" : "bg-teal-500/35"
+        )}
+      />
+
+      <div className="relative">
+        <TeamNode member={developer} theme={theme} level="lead" />
+      </div>
+
+      <div className="relative mx-auto hidden h-16 max-w-4xl md:block">
+        <ConnectorLine theme={theme} className="left-1/2 top-0 h-full w-[4px] -translate-x-1/2" />
+        <div
+          className={cn(
+            "absolute left-1/4 right-1/4 top-full h-[4px] rounded-full",
+            theme.isDark
+              ? "bg-gradient-to-r from-teal-300 via-cyan-300 to-teal-300 shadow-[0_0_18px_rgba(45,212,191,0.35)]"
+              : "bg-gradient-to-r from-teal-600 via-blue-600 to-teal-600 shadow-[0_0_16px_rgba(13,148,136,0.22)]"
+          )}
+        />
+      </div>
+
+      <div className="mt-8 grid gap-8 md:mt-0 md:grid-cols-2">
+        {secondLevelMembers.map((member, index) => (
+          <div key={member.name} className="relative">
+            <div
+              className="absolute -top-8 left-1/2 hidden h-8 w-[4px] -translate-x-1/2 md:block"
+            />
+            <ConnectorLine theme={theme} className="-top-8 left-1/2 h-8 w-[4px] -translate-x-1/2" />
+            <TeamNode member={member} theme={theme} level="second" delay={index * 0.08} />
+          </div>
+        ))}
+      </div>
+
+      <div className="relative mx-auto hidden h-14 max-w-5xl md:block">
+        <ConnectorLine theme={theme} className="left-1/2 top-0 h-full w-[4px] -translate-x-1/2" />
+        <div
+          className={cn(
+            "absolute left-[12.5%] right-[12.5%] top-full h-[4px] rounded-full",
+            theme.isDark
+              ? "bg-gradient-to-r from-blue-400 via-teal-300 to-blue-400 shadow-[0_0_18px_rgba(96,165,250,0.3)]"
+              : "bg-gradient-to-r from-blue-600 via-teal-600 to-blue-600 shadow-[0_0_16px_rgba(37,99,235,0.2)]"
+          )}
+        />
+      </div>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        {supportTeams.map((group, groupIndex) => (
+          <div key={groupIndex} className="relative grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div
+              className="absolute -top-8 left-1/2 hidden h-8 w-[4px] -translate-x-1/2 md:block"
+            />
+            <ConnectorLine theme={theme} className="-top-8 left-1/2 h-8 w-[4px] -translate-x-1/2" />
+            {group.map((member, index) => (
+              <TeamNode
+                key={member.name}
+                member={member}
+                theme={theme}
+                delay={0.1 + (groupIndex * group.length + index) * 0.04}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -602,7 +931,7 @@ const Homepage: React.FC = () => {
         </div>
       </section>
 
-      {/* Our Team Section */}
+      {/* Project Team Structure Section */}
       <section id="team" className={cn("px-6 py-24", theme.sectionSecondary)}>
         <div className="mx-auto max-w-7xl">
           <motion.div
@@ -613,49 +942,19 @@ const Homepage: React.FC = () => {
             transition={{ duration: 0.7 }}
             className="mx-auto max-w-3xl text-center"
           >
-            <SectionLabel>Our Team</SectionLabel>
+            <SectionLabel>Project Team Structure</SectionLabel>
 
             <h2 className={cn("text-4xl font-black md:text-5xl", theme.heading)}>
-              The developers behind the system.
+              Meet the team behind the system.
             </h2>
+
+            <p className={cn("mt-5 leading-8", theme.paragraph)}>
+              Meet the team behind the system, organized according to their
+              roles and project responsibilities.
+            </p>
           </motion.div>
 
-          <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {teamMembers.map((member, index) => (
-              <motion.div
-                key={member.name}
-                variants={fadeUp}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                transition={{ duration: 0.55, delay: index * 0.06 }}
-                whileHover={{ y: -10, scale: 1.02 }}
-                className={cn(
-                  "rounded-[2rem] border p-7 text-center shadow-xl transition",
-                  theme.card
-                )}
-              >
-                <div
-                  className={cn(
-                    "mx-auto flex h-24 w-24 items-center justify-center rounded-full border-4",
-                    theme.isDark
-                      ? "border-teal-300/30 bg-gradient-to-br from-teal-400/20 to-blue-500/20"
-                      : "border-teal-300/60 bg-gradient-to-br from-teal-100 to-blue-100"
-                  )}
-                >
-                  <Users className="text-teal-500" size={38} />
-                </div>
-
-                <h3 className={cn("mt-5 text-xl font-bold", theme.heading)}>
-                  {member.name}
-                </h3>
-
-                <p className="mt-2 text-sm font-medium text-teal-500">
-                  {member.role}
-                </p>
-              </motion.div>
-            ))}
-          </div>
+          <TeamHierarchy theme={theme} />
         </div>
       </section>
 

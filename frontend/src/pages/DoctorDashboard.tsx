@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
 import {
-  FiShield,
   FiLock,
   FiPauseCircle,
   FiUsers,
   FiCalendar,
 } from "react-icons/fi"
 import DashboardShell from "../components/DashboardShell"
-import LoginAttempts from "../components/LoginAttempts"
 import ResetPasswordPanel from "../components/ResetPasswordPanel"
 import ChangeEmail from "../components/ChangeEmail"
 import NotificationsDrawer from "../components/NotificationsDrawer"
@@ -23,7 +21,7 @@ import { useTheme } from "../theme"
 import { getSession } from "../session"
 import type { AppointmentOut, PatientOut } from "../types"
 
-type Panel = "appointments" | "patients" | "attempts" | "reset"
+type Panel = "appointments" | "patients" | "reset"
 
 export default function DoctorDashboard() {
   const session = getSession()
@@ -39,7 +37,6 @@ export default function DoctorDashboard() {
   const [notif, setNotif] = useState({ open: false, type: "success" as "success" | "error", msg: "" })
 
   const userEmail = session?.email || ""
-  const userPassword = useMemo(() => localStorage.getItem("userPassword") || "", [])
   const userInitial = (session?.profile?.name || userEmail).charAt(0).toUpperCase()
 
   useEffect(() => {
@@ -118,7 +115,6 @@ export default function DoctorDashboard() {
   const navItems = [
     { key: "appointments", label: "Appointments", icon: <FiCalendar /> },
     { key: "patients", label: "Patients", icon: <FiUsers /> },
-    { key: "attempts", label: "Login Attempts", icon: <FiShield /> },
     { key: "reset", label: "Reset Password", icon: <FiLock /> },
   ]
 
@@ -261,17 +257,8 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {active === "attempts" && <LoginAttempts isDark={isDark} />}
-
       {active === "reset" && (
-        <ResetPasswordPanel
-          currentPassword={userPassword}
-          onSavePassword={(np) => {
-            localStorage.setItem("userPassword", np)
-            setNotif({ open: true, type: "success", msg: "Password updated locally" })
-          }}
-          isDark={isDark}
-        />
+        <ResetPasswordPanel isDark={isDark} />
       )}
 
       <ChangeEmail

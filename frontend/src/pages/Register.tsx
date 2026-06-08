@@ -5,7 +5,7 @@ import type { RegisterBasics } from "../components/AuthForm"
 import ResetMethodForm from "../components/ResetMethodForm"
 import type { ResetMethodPayload } from "../components/ResetMethodForm"
 import Notification from "../components/Modal"
-import { registerUser, enrollFace, getResetMethod } from "../api/api"
+import { checkEmailAvailability, registerUser } from "../api/api"
 import registerImg from "../images/register.png"
 import type { Role } from "../types"
 
@@ -48,11 +48,15 @@ export default function Register() {
     // /reset-method returns 200 if the user exists, 404 if not.
     setChecking(true)
     try {
-      await getResetMethod(data.email)
-      // Reachable => user exists => email already taken.
-      const msg = "This email is already registered. Please use a different email or login instead."
-      setBasicsError(msg)
-      showError(msg)
+      const response = await checkEmailAvailability(data.email)
+      if (!response.data?.available) {
+        const msg = "This email is already registered. Please use a different email or login instead."
+        setBasicsError(msg)
+        showError(msg)
+        return
+      }
+      setBasics({ ...data, email: data.email.trim().toLowerCase() })
+      setStep("reset")
       return
     } catch (err) {
       const e = err as {
@@ -61,7 +65,7 @@ export default function Register() {
         message?: string
       }
       const status = e.response?.status
-      if (status === 404) {
+      if (status === -1) {
         // Email is available — continue to step 2.
         setBasics(data)
         setStep("reset")
@@ -85,36 +89,21 @@ export default function Register() {
     setSubmitError("")
     setLoading(true)
     try {
-      const faceImage = reset.face_image
       const payload: Record<string, unknown> = {
         ...basics,
         reset_method: reset.reset_method,
       }
-      if (reset.reset_method === "key") {
-        payload.reset_key = reset.reset_key
-      } else if (reset.reset_method === "question") {
-        payload.security_question = reset.security_question
-        payload.security_answer = reset.security_answer
-      } else if (reset.reset_method === "face") {
-        // Backend requires non-null reset metadata, then we enroll the face
-        // separately with the captured image bytes.
-        payload.reset_method = "key"
-        payload.reset_key = "FaceTmpKey1"
-      }
+      if (reset.reset_method === "key") payload.reset_key = reset.reset_key
+      if (reset.reset_method === "question") payload.security_answers = reset.security_answers
+      if (reset.reset_method === "face") payload.face_image = reset.face_image
       await registerUser(payload as unknown as Parameters<typeof registerUser>[0])
-
-      if (reset.reset_method === "face" && faceImage) {
-        await enrollFace({ email: basics.email, face_image: faceImage })
-      }
 
       setNotificationType("success")
       setNotificationMessage("Registration successful. Redirecting to login...")
       setNotificationOpen(true)
       localStorage.setItem("userEmail", basics.email)
-      localStorage.setItem("userPassword", basics.password)
-
       setTimeout(() => {
-        navigate("/login", { state: { email: basics.email, password: basics.password } })
+        navigate("/login", { state: { email: basics.email } })
       }, 1100)
     } catch (err) {
       const e = err as {

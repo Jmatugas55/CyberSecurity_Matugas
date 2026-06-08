@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 import type { Role } from "../types"
+import { listSpecializations } from "../api/api"
 
 export type RegisterBasics = {
   email: string
@@ -36,6 +37,7 @@ export default function AuthForm({
 }: Props) {
   const [name, setName] = useState("")
   const [specialization, setSpecialization] = useState("")
+  const [specializations, setSpecializations] = useState<string[]>([])
   const [contact, setContact] = useState("")
 
   const [email, setEmail] = useState(initialEmail)
@@ -44,6 +46,10 @@ export default function AuthForm({
   const [submitError, setSubmitError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+
+  useEffect(() => {
+    listSpecializations().then((rows) => setSpecializations(rows.map((row) => row.name))).catch(() => undefined)
+  }, [])
 
   const handlePasswordChange = (value: string) => {
     const enc = new TextEncoder().encode(value)
@@ -173,12 +179,16 @@ export default function AuthForm({
         <div>
           <label className={labelBase}>Specialization</label>
           <input
-            type="text"
+            type="search"
+            list="specialization-options"
             value={specialization}
             onChange={(e) => setSpecialization(e.target.value)}
-            placeholder="e.g. Cardiology"
+            placeholder="Search specialization"
             className={inputBase}
           />
+          <datalist id="specialization-options">
+            {specializations.map((name) => <option key={name} value={name} />)}
+          </datalist>
         </div>
       ) : (
         <div>

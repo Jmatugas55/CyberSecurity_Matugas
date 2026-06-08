@@ -119,7 +119,11 @@ export default function FaceCapture({
           onCaptureRef.current(frame)
           return
         }
-        setScan({ kind: "no_match", hint: "Still scanning — keep looking at the camera." })
+        if (res?.data?.reason === "no_face") {
+          setScan({ kind: "no_face", hint: "Position your face clearly inside the frame." })
+        } else {
+          setScan({ kind: "no_match", hint: "Face not matched yet. Keep looking at the camera." })
+        }
       } catch (err) {
         if (cancelled) return
         const e = err as { response?: { status?: number; data?: { detail?: unknown } } }

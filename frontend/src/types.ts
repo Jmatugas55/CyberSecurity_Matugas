@@ -1,4 +1,9 @@
-export type Role = "doctor" | "patient"
+export type Role = "admin" | "doctor" | "patient"
+
+export interface SecurityAnswerInput {
+  question_id: number
+  answer: string
+}
 
 export interface RegisterData {
   email: string
@@ -11,6 +16,7 @@ export interface RegisterData {
   reset_key?: string
   security_question?: string
   security_answer?: string
+  security_answers?: SecurityAnswerInput[]
 }
 
 export interface LoginAttempt {
@@ -39,6 +45,7 @@ export interface ForgotPasswordData {
   security_question?: string
   security_answer?: string
   face_image?: string
+  security_answers?: SecurityAnswerInput[]
 }
 
 export interface ResetPasswordData {
@@ -81,8 +88,37 @@ export interface AppointmentOut {
   appointment_date: string
   appointment_time: string
   diagnosis: string | null
-  status: "pending" | "accepted" | "rejected" | "completed"
+  status: "pending" | "accepted" | "rejected" | "completed" | "cancelled"
   created_at: string | null
+}
+
+export interface CareRequestInput {
+  chief_complaint: string
+  symptoms: string
+  symptom_duration?: string
+  severity: "mild" | "moderate" | "severe"
+  urgency: "routine" | "soon" | "urgent"
+  preferred_date?: string
+  preferred_time?: string
+  visit_type: "in_person" | "teleconsultation"
+  known_conditions?: string
+  current_medications?: string
+  allergies?: string
+  additional_notes?: string
+}
+
+export interface CareRequestOut extends CareRequestInput {
+  id: number
+  patient_id: number
+  patient_name: string
+  patient_contact: string
+  doctor_id: number | null
+  doctor_name: string | null
+  appointment_id: number | null
+  suggested_specialization: string
+  admin_notes: string | null
+  status: "submitted" | "under_review" | "assigned" | "rejected" | "cancelled" | "completed"
+  created_at: string
 }
 
 export interface NotificationOut {
@@ -98,4 +134,5 @@ export interface SessionUser {
   email: string
   role: Role
   profile: { id: number; name: string; specialization?: string; contact_number?: string } | null
+  access_token: string
 }

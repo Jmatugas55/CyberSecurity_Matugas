@@ -4,7 +4,9 @@ from sqlalchemy import func, case
 from datetime import datetime
 
 from .. import database
+from .. import models
 from ..models import LoginAttempt, User
+from ..security import require_roles
 
 router = APIRouter()
 
@@ -19,6 +21,7 @@ def get_db():
 
 @router.get("/login-attempts")
 def get_login_attempts(filter: str | None = Query(None, description="all|failed|success"),
+                       _: models.User = Depends(require_roles("admin")),
                        db: Session = Depends(get_db)):
     """Returns aggregated success/failed counts per email.
 
@@ -54,7 +57,7 @@ def get_login_attempts(filter: str | None = Query(None, description="all|failed|
 
 
 @router.get("/blocked-users")
-def get_blocked_users(db: Session = Depends(get_db)):
+def get_blocked_users(_: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     """Return users whose account is currently locked due to failed logins."""
     now = datetime.utcnow()
     users = db.query(User).filter(User.blocked_until != None, User.blocked_until > now).all()
@@ -65,7 +68,7 @@ def get_blocked_users(db: Session = Depends(get_db)):
 
 
 @router.post("/unblock-user/{user_id}")
-def unblock_user(user_id: int, db: Session = Depends(get_db)):
+def unblock_user(user_id: int, _: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -76,7 +79,7 @@ def unblock_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/login-attempts/{attempt_id}")
-def delete_login_attempt(attempt_id: int, db: Session = Depends(get_db)):
+def delete_login_attempt(attempt_id: int, _: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     attempt = db.query(LoginAttempt).filter(LoginAttempt.id == attempt_id).first()
     if not attempt:
         raise HTTPException(status_code=404, detail="Attempt not found")
@@ -86,7 +89,7 @@ def delete_login_attempt(attempt_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/login-attempts/reset-failed/{email}")
-def reset_failed_attempts(email: str, db: Session = Depends(get_db)):
+def reset_failed_attempts(email: str, _: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     db.query(LoginAttempt).filter(
         LoginAttempt.email == email,
         LoginAttempt.success == False,
@@ -97,7 +100,7 @@ def reset_failed_attempts(email: str, db: Session = Depends(get_db)):
 
 
 @router.post("/login-attempts/reset-success/{email}")
-def reset_success_attempts(email: str, db: Session = Depends(get_db)):
+def reset_success_attempts(email: str, _: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     db.query(LoginAttempt).filter(
         LoginAttempt.email == email,
         LoginAttempt.success == True,
@@ -107,7 +110,7 @@ def reset_success_attempts(email: str, db: Session = Depends(get_db)):
 
 
 @router.post("/login-attempts/reset-all/{email}")
-def reset_all_attempts(email: str, db: Session = Depends(get_db)):
+def reset_all_attempts(email: str, _: models.User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     db.query(LoginAttempt).filter(LoginAttempt.email == email).delete()
     db.query(User).filter(User.email == email).update({"blocked_until": None})
     db.commit()

@@ -8,11 +8,12 @@ import PatientDashboard from "./pages/PatientDashboard"
 import { getRole } from "./session"
 import { ThemeProvider } from "./theme"
 import Homepage from "./pages/Homepage"
+import AdminDashboard from "./pages/AdminDashboard"
 
-function RequireRole({ role, children }: { role: "doctor" | "patient"; children: ReactElement }) {
+function RequireRole({ role, children }: { role: "admin" | "doctor" | "patient"; children: ReactElement }) {
   const r = getRole()
   if (!r) return <Navigate to="/" replace />
-  if (r !== role) return <Navigate to={r === "doctor" ? "/doctor" : "/patient"} replace />
+  if (r !== role) return <Navigate to={`/${r}`} replace />
   return children
 }
 
@@ -25,6 +26,14 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot" element={<ForgotPassword />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireRole role="admin">
+                <AdminDashboard />
+              </RequireRole>
+            }
+          />
           <Route
             path="/doctor"
             element={
@@ -55,5 +64,5 @@ export default function App() {
 function RoleRedirect() {
   const r = getRole()
   if (!r) return <Navigate to="/" replace />
-  return <Navigate to={r === "doctor" ? "/doctor" : "/patient"} replace />
+  return <Navigate to={`/${r}`} replace />
 }

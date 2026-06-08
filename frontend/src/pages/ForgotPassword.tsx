@@ -1,434 +1,200 @@
-import { useEffect, useState } from "react"
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom"
-import { Eye, EyeOff, ArrowLeft, ShieldCheck } from "lucide-react"
+import { useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
+import { ArrowLeft, Eye, EyeOff, HelpCircle, KeyRound, ScanFace, ShieldCheck } from "lucide-react"
 import Notification from "../components/Modal"
 import FaceCapture from "../components/FaceCapture"
-import {
-  requestPasswordReset,
-  resetPassword,
-  getSecurityQuestion,
-  getResetMethod,
-} from "../api/api"
+import { getResetMethod, getSecurityQuestion, requestPasswordReset, resetPassword } from "../api/api"
 import forgot from "../images/forgot.png"
 
 type Method = "key" | "question" | "face"
-
-type ApiError = {
-  response?: { data?: { detail?: unknown } }
-  request?: unknown
-  message?: string
-}
-
-const initialForm = {
-  email: "",
-  method: "key" as Method,
-  key: "",
-  question: "",
-  answer: "",
-  faceImage: "",
-  token: "",
-  password: "",
-  confirm: "",
-}
+type Question = { id: number; question_text: string; answer: string }
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
   const location = useLocation()
-  const passedEmail = (location.state as { email?: string } | null)?.email || ""
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [form, setForm] = useState({ ...initialForm, email: passedEmail })
-  const [notif, setNotif] = useState({ open: false, type: "success" as "success" | "error", msg: "" })
-  const emailFixed = Boolean(passedEmail)
-  const [status, setStatus] = useState({ loading: false, qError: "", validation: "", localError: "" })
+  const [email, setEmail] = useState((location.state as { email?: string } | null)?.email || "")
+  const [method, setMethod] = useState<Method | null>(null)
+  const [resetKey, setResetKey] = useState("")
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [faceImage, setFaceImage] = useState("")
   const [showCapture, setShowCapture] = useState(false)
-  const [methodLocked, setMethodLocked] = useState(false)
-  const [showPwd, setShowPwd] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const isResetStage = Boolean(form.token || searchParams.get("stage") === "reset")
-  const show = (type: "success" | "error", msg: string) => setNotif({ open: true, type, msg })
+  const [token, setToken] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [notif, setNotif] = useState({ open: false, type: "success" as "success" | "error", message: "" })
+  const show = (type: "success" | "error", message: string) => setNotif({ open: true, type, message })
 
-  const validatePassword = (pwd: string) => {
-    if (pwd.length < 8) return "Password must be at least 8 characters"
-    if (!/[A-Z]/.test(pwd)) return "Must include at least one uppercase"
-    if (!/[a-z]/.test(pwd)) return "Must include at least one lowercase"
-    if (!/[0-9]/.test(pwd)) return "Must include at least one number"
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return "Must include a special character"
-    return ""
-  }
-
-  // When email is provided, fetch the user's chosen reset_method.
-  useEffect(() => {
-    if (!form.email.trim()) return
-    let cancelled = false
-    getResetMethod(form.email.trim())
-      .then((res) => {
-        if (cancelled) return
-        const m = res.data?.reset_method as Method
-        if (m === "key" || m === "question" || m === "face") {
-          setForm((f) => ({ ...f, method: m }))
-          setMethodLocked(true)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setMethodLocked(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [form.email])
-
-  useEffect(() => {
-    if (form.token) setSearchParams({ stage: "reset" })
-  }, [form.token, setSearchParams])
-
-  useEffect(() => {
-    if (form.method !== "question") return
-    const email = form.email.trim()
-    if (!email) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStatus((s) => ({ ...s, qError: "Enter email to load security question", loading: false }))
-      return
-    }
-    let cancelled = false
-    setStatus((s) => ({ ...s, loading: true, qError: "" }))
-    getSecurityQuestion(email)
-      .then((res) => {
-        if (cancelled) return
-        const q = res.data?.security_question || ""
-        setForm((f) => ({ ...f, question: q }))
-        setStatus((s) => ({ ...s, qError: q ? "" : "No security question found for this email" }))
-      })
-      .catch((err: ApiError) => {
-        if (cancelled) return
-        const detail = err?.response?.data?.detail
-        setForm((f) => ({ ...f, question: "" }))
-        setStatus((s) => ({
-          ...s,
-          qError: typeof detail === "string" ? detail : "Unable to load security question",
-        }))
-      })
-      .finally(() => {
-        if (!cancelled) setStatus((s) => ({ ...s, loading: false }))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [form.method, form.email])
-
-  const requestReset = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setStatus((s) => ({ ...s, validation: "" }))
-    const email = form.email.trim()
-    if (!email) return setStatus((s) => ({ ...s, validation: "Email is required" }))
-
-    const payload: Record<string, string> = { email, reset_method: form.method }
-
-    if (form.method === "key") {
-      const key = form.key.trim()
-      if (!key) return setStatus((s) => ({ ...s, validation: "Reset key is required" }))
-      if (!/^[A-Za-z0-9_-]{6,32}$/.test(key))
-        return setStatus((s) => ({ ...s, validation: "Key must be 6-32 characters, letters/digits/-/_" }))
-      payload.reset_key = key
-    } else if (form.method === "question") {
-      if (!form.question) return setStatus((s) => ({ ...s, validation: "Security question must be loaded first" }))
-      if (!form.answer.trim()) return setStatus((s) => ({ ...s, validation: "Security answer is required" }))
-      payload.security_question = form.question
-      payload.security_answer = form.answer.trim()
-    } else if (form.method === "face") {
-      if (!form.faceImage) return setStatus((s) => ({ ...s, validation: "Please capture your face" }))
-      payload.face_image = form.faceImage
-    }
-
+  const detectMethod = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
     try {
-      const resp = await requestPasswordReset(payload as unknown as Parameters<typeof requestPasswordReset>[0])
-      const token = resp.data?.token
-      if (token) {
-        setForm((f) => ({ ...f, token }))
-        show("success", "Verification successful. Please enter your new password.")
-      } else {
-        show("error", "No token returned from server")
+      const response = await getResetMethod(email.trim())
+      const selected = response.data?.reset_method as Method
+      if (!["key", "question", "face"].includes(selected)) throw new Error("Unsupported recovery method")
+      setMethod(selected)
+      if (selected === "question") {
+        const questionResponse = await getSecurityQuestion(email.trim())
+        const rows = questionResponse.data?.questions || []
+        if (rows.length !== 3) throw new Error("This account does not have three recovery questions configured")
+        setQuestions(rows.map((row: { id: number; question_text: string }) => ({ ...row, answer: "" })))
       }
-    } catch (err) {
-      const detail = (err as ApiError)?.response?.data?.detail
-      show("error", typeof detail === "string" ? detail : "Unable to request reset")
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } }; message?: string }).response?.data?.detail
+      show("error", detail || (error as Error).message || "Could not load the recovery method")
+    } finally {
+      setBusy(false)
     }
   }
 
-  const resetSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const err = validatePassword(form.password)
-    if (err) return setStatus((s) => ({ ...s, localError: err }))
-    if (form.password !== form.confirm)
-      return setStatus((s) => ({ ...s, localError: "Passwords do not match" }))
-    setStatus((s) => ({ ...s, localError: "" }))
+  const verifyRecovery = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!method) return
+    if (method === "key" && !/^[A-Za-z0-9_-]{6,32}$/.test(resetKey)) {
+      return show("error", "Enter your 6-32 character reset key")
+    }
+    if (method === "question" && questions.some((question) => question.answer.trim().length < 3)) {
+      return show("error", "Answer all three security questions")
+    }
+    if (method === "face" && !faceImage) return show("error", "Scan your face before continuing")
 
+    setBusy(true)
     try {
-      await resetPassword({ email: form.email, token: form.token, new_password: form.password })
-      show("success", "Password successfully reset, please login")
-      setTimeout(() => navigate("/login", { state: { email: form.email, password: form.password } }), 1100)
-    } catch (err) {
-      const detail = (err as ApiError)?.response?.data?.detail
-      show("error", typeof detail === "string" ? detail : "Reset failed")
+      const payload = {
+        email: email.trim(),
+        reset_method: method,
+        ...(method === "key" ? { reset_key: resetKey } : {}),
+        ...(method === "question" ? {
+          security_answers: questions.map((question) => ({
+            question_id: question.id,
+            answer: question.answer,
+          })),
+        } : {}),
+        ...(method === "face" ? { face_image: faceImage } : {}),
+      }
+      const response = await requestPasswordReset(payload)
+      setToken(response.data.token)
+      show("success", "Identity verified. Set your new password.")
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      show("error", detail || "Recovery verification failed")
+    } finally {
+      setBusy(false)
     }
   }
 
-  const inputBase =
-    "w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200 shadow-inner hover:bg-white"
-  const labelBase = "block text-sm font-semibold text-slate-700 mb-1.5"
+  const finish = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (password !== confirm) return show("error", "Passwords do not match")
+    setBusy(true)
+    try {
+      await resetPassword({ email, token, new_password: password })
+      show("success", "Password reset successful")
+      setTimeout(() => navigate("/login", { state: { email } }), 900)
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      show("error", detail || "Password reset failed")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const resetDetectedMethod = () => {
+    setMethod(null)
+    setResetKey("")
+    setQuestions([])
+    setFaceImage("")
+    setShowCapture(false)
+  }
+
+  const input = "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none"
+  const methodLabel = method === "key" ? "Reset Key" : method === "question" ? "Three Security Questions" : "Face Recognition"
+  const MethodIcon = method === "key" ? KeyRound : method === "question" ? HelpCircle : ScanFace
 
   return (
-    <div className="h-screen w-full flex bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-50">
-      <div className="w-full md:w-1/2 flex items-center justify-center px-6 sm:px-10 py-8 overflow-y-auto">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-300/40 border border-slate-100 p-8 sm:p-10">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200 mb-4">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Forgot Password</h1>
-            <p className="text-slate-500 mt-2">
-              Verify with your chosen method, then set a new password
-            </p>
+    <div className="min-h-screen w-full flex bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-50">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl border bg-white p-8 shadow-2xl">
+          <div className="text-center mb-7">
+            <ShieldCheck className="mx-auto mb-3 text-blue-600" size={42} />
+            <h1 className="text-3xl font-bold text-slate-900">Secure Recovery</h1>
+            <p className="text-slate-500 mt-2">Use the recovery method selected during registration.</p>
           </div>
 
-          <form onSubmit={isResetStage ? resetSubmit : requestReset} className="space-y-5 w-full">
-            <div>
-              <label className={labelBase}>Email Address</label>
-              <input
-                type="email"
-                placeholder="example@email.com"
-                value={form.email}
-                onChange={(e) => {
-                  if (!emailFixed) setForm((f) => ({ ...f, email: e.target.value }))
-                }}
-                required
-                disabled={emailFixed}
-                className={`${inputBase} ${emailFixed ? "bg-slate-100 text-slate-500" : ""}`}
-              />
-            </div>
+          {!method && !token && (
+            <form onSubmit={detectMethod} className="space-y-4">
+              <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" required />
+              <button disabled={busy} className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white disabled:opacity-60">
+                {busy ? "Checking..." : "Continue"}
+              </button>
+            </form>
+          )}
 
-            {!methodLocked && !isResetStage && (
-              <div>
-                <label className={labelBase}>Verification method</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["key", "question", "face"] as Method[]).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, method }))}
-                      className={`py-2.5 rounded-xl text-xs font-semibold border transition-all duration-200 ${
-                        form.method === method
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      {method === "key" ? "Reset Key" : method === "question" ? "Question" : "Face"}
-                    </button>
-                  ))}
-                </div>
+          {method && !token && (
+            <form onSubmit={verifyRecovery} className="space-y-4">
+              <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <MethodIcon className="text-blue-600" size={20} />
+                <div><p className="text-sm font-semibold text-slate-800">{methodLabel}</p><p className="text-xs text-slate-500">Configured recovery method</p></div>
               </div>
-            )}
 
-            {methodLocked && !isResetStage && (
-              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
-                <p className="text-xs text-slate-600">
-                  Detected reset method:{" "}
-                  <span className="font-semibold text-blue-700">
-                    {form.method === "key"
-                      ? "Reset Key"
-                      : form.method === "question"
-                      ? "Security Question"
-                      : "Face Recognition"}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {!isResetStage && form.method === "key" && (
-              <div>
-                <label className={labelBase}>Reset key</label>
-                <input
-                  type="text"
-                  value={form.key}
-                  onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
-                  placeholder="Enter reset key"
-                  className={inputBase}
-                />
-              </div>
-            )}
-
-            {!isResetStage && form.method === "question" && (
-              <div className="space-y-3">
+              {method === "key" && (
                 <div>
-                  <label className={labelBase}>Security question</label>
-                  {status.loading ? (
-                    <p className="text-slate-600 text-sm">Loading your question...</p>
-                  ) : form.question ? (
-                    <p className="text-slate-800 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm">
-                      {form.question}
-                    </p>
-                  ) : (
-                    <p className="text-rose-600 text-sm">
-                      {status.qError || "No security question available."}
-                    </p>
+                  <label className="mb-1 block text-sm font-semibold text-slate-700">Reset Key</label>
+                  <input className={input} type="password" value={resetKey} onChange={(e) => setResetKey(e.target.value)} placeholder="Enter your private reset key" required />
+                </div>
+              )}
+
+              {method === "question" && questions.map((question, index) => (
+                <div key={question.id}>
+                  <label className="mb-1 block text-sm font-semibold text-slate-700">{question.question_text}</label>
+                  <input className={input} type="password" value={question.answer} required onChange={(e) => setQuestions((current) => current.map((item, i) => i === index ? { ...item, answer: e.target.value } : item))} />
+                </div>
+              ))}
+
+              {method === "face" && (
+                <div>
+                  {!faceImage && !showCapture && <button type="button" onClick={() => setShowCapture(true)} className="w-full rounded-xl border-2 border-dashed border-blue-300 py-3 font-medium text-blue-600 hover:bg-blue-50">Open Camera to Scan Face</button>}
+                  {showCapture && !faceImage && (
+                    <FaceCapture
+                      isDark={false}
+                      scanEmail={email.trim()}
+                      onCapture={(image) => { setFaceImage(image); setShowCapture(false) }}
+                      onCancel={() => setShowCapture(false)}
+                    />
+                  )}
+                  {faceImage && (
+                    <div className="flex items-center gap-3 rounded-xl border bg-slate-50 p-3">
+                      <img src={faceImage} alt="Verified face" className="h-20 w-20 rounded-lg object-cover" />
+                      <div><p className="text-sm font-semibold text-emerald-700">Face matched</p><button type="button" onClick={() => { setFaceImage(""); setShowCapture(true) }} className="text-xs text-blue-600">Scan again</button></div>
+                    </div>
                   )}
                 </div>
-                <div>
-                  <label className={labelBase}>Security answer</label>
-                  <input
-                    type="text"
-                    value={form.answer}
-                    onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
-                    placeholder="Enter your security answer"
-                    className={inputBase}
-                  />
-                </div>
+              )}
+
+              <button disabled={busy} className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Verifying..." : "Verify & Continue"}</button>
+              <button type="button" onClick={resetDetectedMethod} className="w-full text-sm text-slate-500">Use another email</button>
+            </form>
+          )}
+
+          {token && (
+            <form onSubmit={finish} className="space-y-4">
+              <div className="relative">
+                <input className={input} type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New strong password" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-500">{showPassword ? <EyeOff /> : <Eye />}</button>
               </div>
-            )}
+              <input className={input} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm password" required />
+              <button disabled={busy} className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Resetting..." : "Reset Password"}</button>
+            </form>
+          )}
 
-            {!isResetStage && form.method === "face" && (
-              <div className="space-y-2">
-                {!form.faceImage && !showCapture && (
-                  <button
-                    type="button"
-                    onClick={() => setShowCapture(true)}
-                    disabled={!form.email.trim()}
-                    className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Open Camera to Scan
-                  </button>
-                )}
-                {showCapture && !form.faceImage && (
-                  <FaceCapture
-                    isDark={false}
-                    onCapture={(d) => {
-                      setForm((f) => ({ ...f, faceImage: d }))
-                      setShowCapture(false)
-                    }}
-                    onCancel={() => setShowCapture(false)}
-                    scanEmail={form.email.trim() || undefined}
-                  />
-                )}
-                {form.faceImage && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <img
-                      src={form.faceImage}
-                      alt="captured"
-                      className="w-20 h-20 rounded-lg object-cover border border-slate-300"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-700">Face captured</p>
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700 mt-1"
-                        onClick={() => {
-                          setForm((f) => ({ ...f, faceImage: "" }))
-                          setShowCapture(true)
-                        }}
-                      >
-                        Retake photo
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isResetStage && (
-              <>
-                <div>
-                  <label className={labelBase}>Reset Token</label>
-                  <input
-                    type="text"
-                    placeholder="Enter token"
-                    value={form.token}
-                    onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
-                    required
-                    className={inputBase}
-                  />
-                </div>
-                <div>
-                  <label className={labelBase}>New Password</label>
-                  <div className="relative">
-                    <input
-                      type={showPwd ? "text" : "password"}
-                      placeholder="Enter new password"
-                      value={form.password}
-                      onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                      required
-                      className={`${inputBase} pr-12`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPwd(!showPwd)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500 hover:text-slate-700"
-                    >
-                      {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className={labelBase}>Confirm Password</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirm ? "text" : "password"}
-                      placeholder="Confirm new password"
-                      value={form.confirm}
-                      onChange={(e) => setForm((f) => ({ ...f, confirm: e.target.value }))}
-                      required
-                      className={`${inputBase} pr-12`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirm(!showConfirm)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500 hover:text-slate-700"
-                    >
-                      {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {status.validation && <p className="text-rose-600 text-sm">{status.validation}</p>}
-            {status.localError && <p className="text-rose-600 text-sm">{status.localError}</p>}
-
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all duration-300"
-            >
-              {isResetStage ? "Reset Password" : "Verify & Continue"}
-            </button>
-          </form>
-
-          <button
-            onClick={() => navigate(-1)}
-            className="mt-6 flex items-center justify-center gap-1.5 mx-auto text-sm font-medium text-slate-500 hover:text-slate-700 transition"
-          >
-            <ArrowLeft size={16} />
-            Back
-          </button>
+          <button onClick={() => navigate(-1)} className="mx-auto mt-5 flex items-center gap-2 text-sm text-slate-500"><ArrowLeft size={16} />Back</button>
         </div>
       </div>
-
-      <div className="hidden md:block md:w-1/2 h-full relative">
-        <img src={forgot} alt="Forgot Visual" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-transparent to-indigo-900/30" />
-        <div className="absolute bottom-10 left-10 right-10 text-white drop-shadow-lg">
-          <p className="text-sm font-medium tracking-wider uppercase opacity-90">Account Recovery</p>
-          <h2 className="text-3xl font-bold mt-2 leading-tight">
-            Securely regain access to your account
-          </h2>
-        </div>
+      <div className="hidden md:block md:w-1/2 relative">
+        <img src={forgot} alt="Cyberhealth recovery" className="h-full w-full object-cover" />
       </div>
-
-      <Notification
-        open={notif.open}
-        type={notif.type}
-        message={notif.msg}
-        onClose={() => setNotif((n) => ({ ...n, open: false }))}
-        duration={2000}
-        align="left"
-      />
+      <Notification open={notif.open} type={notif.type} message={notif.message} onClose={() => setNotif((value) => ({ ...value, open: false }))} />
     </div>
   )
 }

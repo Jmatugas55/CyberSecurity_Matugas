@@ -18,10 +18,6 @@ export default function Dashboard() {
     return localStorage.getItem("userEmail") || "guest@example.com";
   }, []);
 
-  const userPassword = useMemo(() => {
-    return localStorage.getItem("userPassword") || "";
-  }, []);
-
   const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : "U";
 
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
@@ -31,8 +27,6 @@ export default function Dashboard() {
       if (!newPassword || newPassword.length < 6) {
         throw new Error("Password must be at least 6 characters long.");
       }
-      localStorage.setItem("userPassword", newPassword);
-
       setNotificationType("success");
       setNotificationMessage("Password updated successfully!");
       setNotificationOpen(true);
@@ -165,7 +159,6 @@ export default function Dashboard() {
           <LoginAttempts isDark={isDark} />
         ) : (
           <ResetPasswordPanel
-            currentPassword={userPassword}
             onSavePassword={handleSavePassword}
             isDark={isDark}
           />

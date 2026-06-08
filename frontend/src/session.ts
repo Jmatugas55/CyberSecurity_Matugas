@@ -22,7 +22,10 @@ export function clearSession() {
   localStorage.removeItem(KEY)
   localStorage.removeItem("userEmail")
   localStorage.removeItem("userRole")
-  localStorage.removeItem("userPassword")
+}
+
+export function getToken(): string | null {
+  return getSession()?.access_token ?? null
 }
 
 export function getRole(): Role | null {

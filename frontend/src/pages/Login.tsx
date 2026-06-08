@@ -38,18 +38,26 @@ export default function Login() {
         email: data.email,
         role: data.role,
         profile: data.profile,
+        access_token: data.access_token,
       })
-      localStorage.setItem("userPassword", password)
       setNotificationType("success")
       setNotificationMessage(`Welcome back, ${data.profile?.name || data.email}`)
       setNotificationOpen(true)
       setTimeout(() => {
-        navigate(data.role === "doctor" ? "/doctor" : "/patient")
+        navigate(`/${data.role}`)
       }, 800)
     } catch (err) {
       const e = err as ApiError
       const detail = e.response?.data?.detail
+      const validationMessage = Array.isArray(detail)
+        ? detail
+            .map((item: { msg?: string; loc?: unknown[] }) =>
+              `${item.loc?.at(-1) || "Field"}: ${item.msg || "Invalid value"}`,
+            )
+            .join(" ")
+        : ""
       const message =
+        validationMessage ||
         (typeof detail === "string" && detail) ||
         (e.request ? "Unable to contact server. Is the backend running?" : e.message) ||
         "Login failed"

@@ -1,14 +1,13 @@
-import { useState } from "react"
-import { KeyRound, HelpCircle, ScanFace, ArrowLeft } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ArrowLeft, HelpCircle, KeyRound, ScanFace } from "lucide-react"
+import { listSecurityQuestions } from "../api/api"
 import FaceCapture from "./FaceCapture"
 
 export type ResetMethod = "key" | "question" | "face"
-
 export type ResetMethodPayload = {
   reset_method: ResetMethod
   reset_key?: string
-  security_question?: string
-  security_answer?: string
+  security_answers?: { question_id: number; answer: string }[]
   face_image?: string
 }
 
@@ -20,216 +19,108 @@ interface Props {
   errorMessage?: string
 }
 
-const methodOptions: { value: ResetMethod; title: string; description: string; Icon: typeof KeyRound }[] = [
-  {
-    value: "key",
-    title: "Reset Key",
-    description: "A personal recovery code only you know",
-    Icon: KeyRound,
-  },
-  {
-    value: "question",
-    title: "Security Question",
-    description: "Answer a memorable question to recover",
-    Icon: HelpCircle,
-  },
-  {
-    value: "face",
-    title: "Face Recognition",
-    description: "Use your camera to verify your identity",
-    Icon: ScanFace,
-  },
+const methods = [
+  { value: "key" as const, title: "Reset Key", description: "Use a private recovery key", Icon: KeyRound },
+  { value: "question" as const, title: "Security Questions", description: "Answer three private questions", Icon: HelpCircle },
+  { value: "face" as const, title: "Face Recognition", description: "Verify using your camera", Icon: ScanFace },
 ]
 
-export default function ResetMethodForm({
-  onSubmit,
-  onBack,
-  buttonText,
-  disabled,
-  errorMessage,
-}: Props) {
+export default function ResetMethodForm({ onSubmit, onBack, buttonText, disabled, errorMessage }: Props) {
   const [method, setMethod] = useState<ResetMethod>("key")
   const [resetKey, setResetKey] = useState("")
-  const [securityQuestion, setSecurityQuestion] = useState("")
-  const [securityAnswer, setSecurityAnswer] = useState("")
+  const [questions, setQuestions] = useState<{ id: number; question_text: string }[]>([])
+  const [selected, setSelected] = useState(["", "", ""])
+  const [answers, setAnswers] = useState(["", "", ""])
   const [faceImage, setFaceImage] = useState("")
   const [showCapture, setShowCapture] = useState(false)
   const [localError, setLocalError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    listSecurityQuestions().then(setQuestions).catch(() => setLocalError("Could not load security questions"))
+  }, [])
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault()
     if (method === "key") {
       if (!/^[A-Za-z0-9_-]{6,32}$/.test(resetKey)) {
-        return setLocalError("Reset key must be 6-32 characters, letters/digits/-/_")
+        return setLocalError("Reset key must be 6-32 letters, numbers, hyphens, or underscores")
       }
+      onSubmit({ reset_method: "key", reset_key: resetKey })
     } else if (method === "question") {
-      if (!securityQuestion.trim()) return setLocalError("Please select a security question")
-      if (securityAnswer.trim().length < 3) return setLocalError("Security answer must be at least 3 characters")
-    } else if (method === "face") {
-      if (!faceImage) return setLocalError("Please capture your face before submitting")
+      const ids = selected.map(Number)
+      if (ids.some((id) => !id) || new Set(ids).size !== 3) {
+        return setLocalError("Choose three different security questions")
+      }
+      if (answers.some((answer) => answer.trim().length < 3)) {
+        return setLocalError("Every security answer must be at least 3 characters")
+      }
+      onSubmit({
+        reset_method: "question",
+        security_answers: ids.map((question_id, index) => ({
+          question_id,
+          answer: answers[index].trim(),
+        })),
+      })
+    } else {
+      if (!faceImage) return setLocalError("Capture your face before creating the account")
+      onSubmit({ reset_method: "face", face_image: faceImage })
     }
     setLocalError("")
-
-    const payload: ResetMethodPayload = { reset_method: method }
-    if (method === "key") payload.reset_key = resetKey
-    if (method === "question") {
-      payload.security_question = securityQuestion
-      payload.security_answer = securityAnswer
-    }
-    if (method === "face") payload.face_image = faceImage
-
-    onSubmit(payload)
   }
 
-  const inputBase =
-    "w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 focus:outline-none transition-all duration-200 shadow-inner hover:bg-white"
-
+  const input = "w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:outline-none"
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 w-full">
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-slate-700">Choose a password recovery method</p>
-        <div className="grid grid-cols-1 gap-2">
-          {methodOptions.map(({ value, title, description, Icon }) => {
-            const active = method === value
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMethod(value)}
-                className={`flex items-start gap-3 text-left p-3 rounded-xl border-2 transition-all duration-200 ${
-                  active
-                    ? "border-blue-500 bg-blue-50 shadow-sm"
-                    : "border-slate-200 bg-white hover:border-slate-300"
-                }`}
-              >
-                <span
-                  className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg ${
-                    active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  <Icon size={18} />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-semibold text-slate-900">{title}</span>
-                  <span className="block text-xs text-slate-500">{description}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
+    <form onSubmit={submit} className="space-y-5">
+      <div className="grid gap-2">
+        {methods.map(({ value, title, description, Icon }) => (
+          <button
+            key={value} type="button" onClick={() => { setMethod(value); setLocalError("") }}
+            className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+              method === value ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"
+            }`}
+          >
+            <span className={`rounded-lg p-2 ${method === value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}><Icon size={18} /></span>
+            <span><span className="block text-sm font-semibold text-slate-900">{title}</span><span className="block text-xs text-slate-500">{description}</span></span>
+          </button>
+        ))}
       </div>
 
       {method === "key" && (
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Reset Key</label>
-          <input
-            type="text"
-            value={resetKey}
-            onChange={(e) => setResetKey(e.target.value)}
-            placeholder="6-32 letters, digits, - or _"
-            className={inputBase}
-          />
-          <p className="text-xs text-slate-500 mt-1.5">
-            Pick something memorable. You will need this key to recover your account.
-          </p>
+          <label className="mb-1 block text-sm font-semibold text-slate-700">Private Reset Key</label>
+          <input className={input} value={resetKey} onChange={(e) => setResetKey(e.target.value)} placeholder="6-32 letters, numbers, - or _" />
+          <p className="mt-1 text-xs text-slate-500">The key is securely hashed before storage.</p>
         </div>
       )}
 
-      {method === "question" && (
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Security Question</label>
-            <select
-              value={securityQuestion}
-              onChange={(e) => setSecurityQuestion(e.target.value)}
-              className={inputBase}
-            >
-              <option value="">Select a security question</option>
-              <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
-              <option value="What was your first pet's name?">What was your first pet's name?</option>
-              <option value="What was the name of your first school?">What was the name of your first school?</option>
-              <option value="What is your favorite color?">What is your favorite color?</option>
-              <option value="What city were you born in?">What city were you born in?</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Security Answer</label>
-            <input
-              type="text"
-              value={securityAnswer}
-              onChange={(e) => setSecurityAnswer(e.target.value)}
-              placeholder="Enter your answer"
-              className={inputBase}
-            />
-          </div>
+      {method === "question" && [0, 1, 2].map((index) => (
+        <div key={index} className="space-y-2">
+          <label className="block text-sm font-semibold text-slate-700">Security question {index + 1}</label>
+          <select className={input} value={selected[index]} onChange={(e) => setSelected((current) => current.map((value, i) => i === index ? e.target.value : value))}>
+            <option value="">Select a question</option>
+            {questions.map((question) => <option key={question.id} value={question.id}>{question.question_text}</option>)}
+          </select>
+          <input type="password" className={input} value={answers[index]} placeholder="Private answer" onChange={(e) => setAnswers((current) => current.map((value, i) => i === index ? e.target.value : value))} />
         </div>
-      )}
+      ))}
 
       {method === "face" && (
-        <div className="space-y-2">
-          {!faceImage && !showCapture && (
-            <button
-              type="button"
-              onClick={() => setShowCapture(true)}
-              className="w-full py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 transition font-medium"
-            >
-              Open Camera to Enroll Face
-            </button>
-          )}
-          {showCapture && !faceImage && (
-            <FaceCapture
-              isDark={false}
-              onCapture={(d) => {
-                setFaceImage(d)
-                setShowCapture(false)
-              }}
-              onCancel={() => setShowCapture(false)}
-              buttonText="Capture & Save"
-              description="Position your face clearly within the frame and click Capture."
-            />
-          )}
+        <div>
+          {!faceImage && !showCapture && <button type="button" onClick={() => setShowCapture(true)} className="w-full rounded-xl border-2 border-dashed border-blue-300 py-3 font-medium text-blue-600 hover:bg-blue-50">Open Camera to Enroll Face</button>}
+          {showCapture && !faceImage && <FaceCapture isDark={false} onCapture={(image) => { setFaceImage(image); setShowCapture(false) }} onCancel={() => setShowCapture(false)} buttonText="Capture & Use Face" />}
           {faceImage && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <img src={faceImage} alt="captured" className="w-20 h-20 rounded-lg object-cover border border-slate-300" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-slate-700">Face captured</p>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700 mt-1"
-                  onClick={() => {
-                    setFaceImage("")
-                    setShowCapture(true)
-                  }}
-                >
-                  Retake photo
-                </button>
-              </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-slate-50 p-3">
+              <img src={faceImage} alt="Enrolled face" className="h-20 w-20 rounded-lg object-cover" />
+              <div><p className="text-sm font-semibold text-slate-700">Face captured</p><button type="button" onClick={() => { setFaceImage(""); setShowCapture(true) }} className="mt-1 text-xs text-blue-600">Retake photo</button></div>
             </div>
           )}
         </div>
       )}
 
-      {(localError || errorMessage) && (
-        <p className="text-rose-600 text-sm">{localError || errorMessage}</p>
-      )}
-
+      {(localError || errorMessage) && <p className="text-sm text-rose-600">{localError || errorMessage}</p>}
       <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={disabled}
-          className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
-        >
-          <ArrowLeft size={16} />
-          Back
-        </button>
-        <button
-          type="submit"
-          disabled={disabled}
-          className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-        >
-          {buttonText}
-        </button>
+        <button type="button" onClick={onBack} disabled={disabled} className="flex items-center gap-2 rounded-xl border px-4 py-3"><ArrowLeft size={16} />Back</button>
+        <button disabled={disabled} className="flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 font-semibold text-white disabled:opacity-50">{buttonText}</button>
       </div>
     </form>
   )
