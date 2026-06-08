@@ -155,7 +155,10 @@ export const markAllNotificationsRead = (_email?: string) => {
   return API.post("/notifications/read-all")
 }
 
-export const getAdminSummary = async () => (await API.get("/admin/summary")).data
+export const getAdminSummary = async (dateStart = "", dateEnd = "") =>
+  (await API.get("/admin/summary", {
+    params: { date_start: dateStart || undefined, date_end: dateEnd || undefined },
+  })).data
 export const getAdminUsers = async (role: "doctor" | "patient", search = "") =>
   (await API.get(`/admin/users/${role}`, { params: { search } })).data
 export const archiveAdminUser = (userId: number) => API.delete(`/admin/users/${userId}`)
@@ -168,8 +171,14 @@ export const assignPatient = (doctor_email: string, patient_email: string, notes
     patient_email: patient_email.trim().toLowerCase(),
     notes,
   })
-export const getAuditLogs = async (search = "") =>
-  (await API.get("/admin/audit-logs", { params: { search } })).data
+export const getAuditLogs = async (search = "", dateStart = "", dateEnd = "") =>
+  (await API.get("/admin/audit-logs", {
+    params: {
+      search,
+      date_start: dateStart || undefined,
+      date_end: dateEnd || undefined,
+    },
+  })).data
 
 export const createCareRequest = (data: CareRequestInput) =>
   API.post("/care-requests", data)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, or_
@@ -28,10 +28,24 @@ def _sync_care_request_statuses(db: Session) -> None:
         db.commit()
 
 
+def _apply_audit_date_filter(query, date_start: date | None, date_end: date | None):
+    if date_start:
+        query = query.filter(models.AuditLog.created_at >= datetime.combine(date_start, time.min))
+    if date_end:
+        query = query.filter(models.AuditLog.created_at <= datetime.combine(date_end, time.max))
+    return query
+
+
 @router.get("/summary")
-def summary(_: models.User = Depends(admin_only), db: Session = Depends(get_db)):
+def summary(
+    date_start: date | None = None,
+    date_end: date | None = None,
+    _: models.User = Depends(admin_only),
+    db: Session = Depends(get_db),
+):
     _sync_care_request_statuses(db)
     count = lambda model, *filters: db.query(func.count(model.id)).filter(*filters).scalar() or 0
+    activity_query = _apply_audit_date_filter(db.query(models.AuditLog), date_start, date_end)
     return {
         "patients": count(models.Patient),
         "doctors": count(models.Doctor),
@@ -45,7 +59,7 @@ def summary(_: models.User = Depends(admin_only), db: Session = Depends(get_db))
                 "description": row.action_description, "email": row.email,
                 "status": row.status, "created_at": row.created_at,
             }
-            for row in db.query(models.AuditLog).order_by(models.AuditLog.created_at.desc()).limit(10).all()
+            for row in activity_query.order_by(models.AuditLog.created_at.desc()).limit(10).all()
         ],
     }
 
@@ -334,10 +348,12 @@ def assignments(_: models.User = Depends(admin_only), db: Session = Depends(get_
 @router.get("/audit-logs")
 def audit_logs(
     search: str = "", role: str | None = None, action: str | None = None,
-    status: str | None = None, page: int = 1, page_size: int = Query(50, le=100),
+    status: str | None = None, date_start: date | None = None,
+    date_end: date | None = None, page: int = 1,
+    page_size: int = Query(50, le=100),
     _: models.User = Depends(admin_only), db: Session = Depends(get_db),
 ):
-    query = db.query(models.AuditLog)
+    query = _apply_audit_date_filter(db.query(models.AuditLog), date_start, date_end)
     if search:
         query = query.filter(or_(
             models.AuditLog.email.ilike(f"%{search}%"),

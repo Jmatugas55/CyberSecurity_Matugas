@@ -99,6 +99,9 @@ export default function AdminDashboard() {
   const [requestBusy, setRequestBusy] = useState(false)
   const [userBusy, setUserBusy] = useState(false)
   const [search, setSearch] = useState("")
+  const [auditDateStart, setAuditDateStart] = useState("")
+  const [auditDateEnd, setAuditDateEnd] = useState("")
+  const [auditPrintedAt, setAuditPrintedAt] = useState(() => new Date().toISOString())
   const [doctorEmail, setDoctorEmail] = useState("")
   const [patientEmail, setPatientEmail] = useState("")
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -116,7 +119,7 @@ export default function AdminDashboard() {
   const currentUserRole: UserRole = active === "doctors" ? "doctor" : "patient"
 
   const load = async () => {
-    if (active === "overview") setSummary(await getAdminSummary())
+    if (active === "overview") setSummary(await getAdminSummary(auditDateStart, auditDateEnd))
     if (active === "doctors" || active === "patients") {
       const result = await getAdminUsers(currentUserRole, search)
       setRows(result.items)
@@ -126,7 +129,7 @@ export default function AdminDashboard() {
       }
     }
     if (active === "assignments") setAssignments(await listAssignments())
-    if (active === "audit") setLogs((await getAuditLogs(search)).items)
+    if (active === "audit") setLogs((await getAuditLogs(search, auditDateStart, auditDateEnd)).items)
     if (active === "requests") {
       const [requests, doctors] = await Promise.all([
         listAdminCareRequests(requestStatus),
@@ -143,7 +146,7 @@ export default function AdminDashboard() {
     }, 0)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, search, requestStatus])
+  }, [active, search, requestStatus, auditDateStart, auditDateEnd])
 
   useEffect(() => {
     if (!appointmentDoctor) return
@@ -221,12 +224,21 @@ export default function AdminDashboard() {
   }
 
   const printAuditLogs = () => {
+    const printedAt = new Date().toISOString()
     const previousTitle = document.title
-    document.title = `Cyberhealth Audit Logs - ${new Date().toLocaleDateString()}`
-    window.print()
+    setAuditPrintedAt(printedAt)
+    document.title = `Cyberhealth Audit Logs - ${new Date(printedAt).toLocaleDateString()}`
+    window.setTimeout(() => {
+      window.print()
+    }, 0)
     window.setTimeout(() => {
       document.title = previousTitle
     }, 250)
+  }
+
+  const clearAuditDateFilter = () => {
+    setAuditDateStart("")
+    setAuditDateEnd("")
   }
 
   return (
@@ -367,16 +379,29 @@ export default function AdminDashboard() {
           </div>
 
           <section className={`rounded-3xl border p-6 shadow-xl ${section}`}>
-            <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold">Recent System Activity</h2>
                 <p className={`text-sm ${muted}`}>Latest administrative and authentication events.</p>
               </div>
-              <span className="rounded-full bg-blue-600/10 px-3 py-1 text-xs font-semibold text-blue-500">
-                Live audit trail
-              </span>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className={`text-xs font-semibold ${muted}`}>
+                  Start date
+                  <input type="date" value={auditDateStart} onChange={(e) => setAuditDateStart(e.target.value)} className={`mt-1 block rounded-xl border px-3 py-2 text-sm outline-none ring-4 ring-transparent transition ${input}`} />
+                </label>
+                <label className={`text-xs font-semibold ${muted}`}>
+                  End date
+                  <input type="date" value={auditDateEnd} onChange={(e) => setAuditDateEnd(e.target.value)} className={`mt-1 block rounded-xl border px-3 py-2 text-sm outline-none ring-4 ring-transparent transition ${input}`} />
+                </label>
+                {(auditDateStart || auditDateEnd) && (
+                  <button onClick={clearAuditDateFilter} className="rounded-xl border border-slate-500/20 px-3 py-2 text-sm font-semibold">
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
             <div className="space-y-3">
+              {recentActivities.length === 0 && <EmptyState message="No recent audit activity matches this date range." />}
               {recentActivities.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-500/15 px-4 py-3">
                   <div>
@@ -572,6 +597,19 @@ export default function AdminDashboard() {
                 <FiSearch className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${muted}`} />
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter logs" className={`w-72 rounded-xl border py-2 pl-10 pr-3 outline-none ring-4 ring-transparent transition ${input}`} />
               </div>
+              <label className={`text-xs font-semibold ${muted}`}>
+                Start date
+                <input type="date" value={auditDateStart} onChange={(e) => setAuditDateStart(e.target.value)} className={`mt-1 block rounded-xl border px-3 py-2 text-sm outline-none ring-4 ring-transparent transition ${input}`} />
+              </label>
+              <label className={`text-xs font-semibold ${muted}`}>
+                End date
+                <input type="date" value={auditDateEnd} onChange={(e) => setAuditDateEnd(e.target.value)} className={`mt-1 block rounded-xl border px-3 py-2 text-sm outline-none ring-4 ring-transparent transition ${input}`} />
+              </label>
+              {(auditDateStart || auditDateEnd) && (
+                <button onClick={clearAuditDateFilter} className="rounded-xl border border-slate-500/20 px-3 py-2 text-sm font-semibold">
+                  Clear
+                </button>
+              )}
               <button onClick={printAuditLogs} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:bg-slate-800">
                 <FiPrinter /> Print / PDF
               </button>
@@ -586,7 +624,8 @@ export default function AdminDashboard() {
                 <p className="mt-1 text-xs text-slate-600">Official system activity and security record</p>
               </div>
               <div className="text-right text-xs text-slate-700">
-                <p><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+                <p><strong>Date printed:</strong> {formatDate(auditPrintedAt)}</p>
+                <p className="mt-1"><strong>Date range:</strong> {formatAuditDateRange(auditDateStart, auditDateEnd)}</p>
                 <p className="mt-1"><strong>Total records:</strong> {logs.length}</p>
               </div>
             </div>
@@ -825,4 +864,12 @@ function humanize(value: string) {
 function formatDate(value: string) {
   if (!value) return "N/A"
   return new Date(value).toLocaleString()
+}
+
+function formatAuditDateRange(start: string, end: string) {
+  if (!start && !end) return "All dates"
+  const formatDateOnly = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString()
+  if (start && end) return `${formatDateOnly(start)} to ${formatDateOnly(end)}`
+  if (start) return `From ${formatDateOnly(start)}`
+  return `Until ${formatDateOnly(end)}`
 }
